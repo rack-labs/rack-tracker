@@ -9,17 +9,19 @@
     <link rel="stylesheet" href="./styles/variables.css">
     <link rel="stylesheet" href="./styles/main.css">
 
-    <script src="./src/main.js" defer></script>
+    <script src="./src/main.js" type="module"></script>
 
 </head>
 <body class="flex-center-column">
     <div class="container still-img  flex-center-column">
-        <img 
-            src="./images/training-quad-focused-squat-variations-main-1024x683.jpg" 
-            alt="Man perfoming squat with barbel equipped plates on both side"
-            id="still-img"
-        >
-        <button class="btn btn-start">클릭하여 분석</button>
+        <div class="imgContainer">
+            <img 
+                id="still-img"
+                src="./images/training-quad-focused-squat-variations-main-1024x683.jpg" 
+                alt="Man perfoming squat with barbel equipped plates on both side"
+            >
+        </div>
+        <button class="btn">Generate Skeleton </button>
     </div>
 </body>
 </html>

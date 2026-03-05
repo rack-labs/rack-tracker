@@ -19,9 +19,20 @@ body{
     gap: 4rem;
 
     border-radius: 3.2rem;
-    background-color: var(--color-bg-section);
+    background-color: var(--color-bg-ssection);
 
     padding: 4rem;
+    
+}
+
+.imgContainer{
+    object-fit: cover;
+    border-radius: 3.2rem;
+    position: relative;
+    box-shadow:
+        0 2px 4px rgba(0,0,0,0.04),
+        0 8px 16px rgba(0,0,0,0.06),
+        0 16px 32px rgba(0,0,0,0.04);
 }
 
 #still-img{
@@ -49,6 +60,11 @@ body{
     cursor: pointer;
 
     transition: all 0.2s ease;
+
+    box-shadow:
+        0 2px 4px rgba(0,0,0,0.04),
+        0 6px 12px rgba(0,0,0,0.06),
+        0 12px 24px rgba(0,0,0,0.04);
 }
 
 .btn:hover {
@@ -58,4 +74,11 @@ body{
 
 .btn:active {
     transform: translateY(0);
+}
+
+.canvas{
+    position: absolute;
+    left: 0;
+    top:0;
+    pointer-events: none;
 }
