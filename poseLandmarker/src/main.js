@@ -22,9 +22,11 @@ const videoHeight = "360px";
 const videoWidth = "480px";
 
 const createPoseLandmarker = async () =>{
-    const vision = await FilesetResolver.forVisionTasks(
+    // MediaPipe runtime(WASM) load
+    const vision = await FilesetResolver.forVisionTasks( 
         "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
     );
+    // Generate PoseLandmarker model
     poseLandmaker = await PoseLandmarker.createFromOptions(vision, {
         modelAssetPath: //Lite model
                 "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
@@ -38,4 +40,15 @@ const createPoseLandmarker = async () =>{
         resultCallback: resultCallback,
     });
 };
+
+// MediaPipe runtime load & Generate PoseLandmarker model
 createPoseLandmarker();
+
+// Set input
+/* Available input type
+    1. Image (HTMLImageElement)
+    2. Video (HTMLVideoElement)
+    3. Webcam (getUserMedia stream)
+*/ 
+// Run PoseLandmarker (detect, detectForVideo)
+// Excute landmark & drawing
