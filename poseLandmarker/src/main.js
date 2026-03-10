@@ -64,7 +64,7 @@ const createPoseLandmarker = async () =>{
 createPoseLandmarker();
 
 const image = document.getElementById('still-img');
-const btn = document.querySelector('.btn');
+const btn = document.getElementById('image-skeleton-btn');
 
 if(btn){
     btn.addEventListener('click', handleClick);
