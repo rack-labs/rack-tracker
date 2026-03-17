@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Pose MVP</title>
+    <link rel="stylesheet" href="./styles/reset.css">
+    <link rel="stylesheet" href="./styles/variables.css">
+    <link rel="stylesheet" href="./styles/main.css">
+    <script src="./src/videoPose.js" type="module"></script>
+</head>
+<body class="app-shell">
+    <main class="container video-section flex-center-column">
+        <h1 class="section-title">Video Skeleton Extractor</h1>
+        <div class="video-toolbar">
+            <label class="field">
+                <span>Source Video</span>
+                <select id="video-source-select">
+                    <option value="./assets/video/backSquat.mp4">backSquat.mp4</option>
+                </select>
+            </label>
+            <label class="field">
+                <span>FPS</span>
+                <input id="video-fps" type="number" min="1" max="120" step="1" value="30">
+            </label>
+            <button id="extract-video-btn" class="btn">Extract Video Skeleton</button>
+            <button id="play-overlay-btn" class="btn secondary-btn">Play Video + Skeleton</button>
+            <button id="download-skeleton-btn" class="btn secondary-btn">Download Skeleton JSON</button>
+        </div>
+        <p id="video-status" class="status-text">
+            Run extraction. The page will keep the result in memory until you play or download it.
+        </p>
+        <div class="videoPlayerContainer">
+            <video
+                id="source-video"
+                class="source-video"
+                preload="metadata"
+                crossorigin="anonymous"
+                controls
+            >
+                <source src="./assets/video/backSquat.mp4" type="video/mp4">
+            </video>
+            <canvas id="video-overlay" class="video-overlay"></canvas>
+        </div>
+    </main>
+</body>
+</html>
