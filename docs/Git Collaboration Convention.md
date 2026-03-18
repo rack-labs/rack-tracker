@@ -80,6 +80,10 @@ hotfix/78-login-error
 
 ## 3. Commit Message 규칙
 
+커밋 전에 반드시 아래 문서를 먼저 확인한다.
+
+- `docs/Codex Commit and Push Workflow.md`
+
 ### 커밋 메시지 구조
 
 type: 요약 설명 (#issue번호)
@@ -181,6 +185,11 @@ git fetch upstream
 git checkout feature/xx-xxx
 
 4. 작업 후 commit
+
+commit 전에 아래 문서를 먼저 읽는다.
+
+- `docs/Git Collaboration Convention.md`
+- `docs/Codex Commit and Push Workflow.md`
 
 git add .
 git commit
