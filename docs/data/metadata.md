@@ -2,7 +2,7 @@
 
 ## 1. 문서 목적
 
-이 문서는 [`poseLandmarker/JSON/backSquat-20260311013416.json`](/C:/Users/neighbor/Documents/Code/Github/rack-tracker-forked/poseLandmarker/JSON/backSquat-20260311013416.json) 파일의 구조와 해석 방법을 데이터분석가 관점에서 설명한다.  
+이 문서는 [`poseLandmarker/JSON/backSquat-20260311013416.json`](/C:/Users/neighbor/Documents/Code/Github/rack-tracker-forked/poseLandmarker/JSON/backSquat-20260311013416.json) 파일의 구조와 해석 방법을 데이터분석가 관점에서 설명한다.
 해당 파일은 백스쿼트 동작 영상을 프레임 단위의 인체 키포인트 시계열 데이터로 변환한 결과물이다.
 
 핵심적으로 이 데이터는 다음 질문에 답하는 데 적합하다.
