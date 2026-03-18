@@ -41,10 +41,12 @@ Closes #10
 - 입력 파일 유효성 검사와 예외 처리 흐름을 추가해 실패 상황에서도 원인을 확인할 수 있도록 한다.
 
 ## 변경 사항 상세
-- OpenCV `VideoCapture`를 이용해 비디오 메타데이터를 읽고 프레임 반복 처리 구조를 추가한다.
-- 프레임 번호, 타임스탬프, 저장 경로 등 추출 결과를 추적할 수 있는 메타데이터 구조를 정의한다.
-- FPS 기준 또는 N프레임 간격 기준으로 추출 옵션을 분리해 재사용 가능하게 설계한다.
-- 잘못된 파일 경로, 지원되지 않는 포맷, 읽기 실패 상황에 대한 예외 메시지를 정리한다.
+- `adapter/opencv_adapter.py`에 `VideoCapture` open/close, 메타데이터 조회, 프레임 읽기, 이미지 저장, 예외 변환 로직을 구현했다.
+- `schema/frame.py`에 `FrameExtractionOptions`, `ExtractedFrame`, `FrameExtractionResult`를 추가해 프레임 추출 계약을 분리했다.
+- `service/video_reader.py`에 `all`, `every_n_frames`, `target_fps`, `time_range` 기준 샘플링과 메타데이터 조립 로직을 구현했다.
+- `controller/jobs.py`와 `service/job_manager.py`를 연결해 업로드 파일 저장, 목업 비디오 fallback, 비동기 job 실행, 상태 전이, 최종 결과 반환 흐름을 구성했다.
+- `service/skeleton_mapper.py`, `service/analysis_pipeline.py`, `service/llm_feedback.py`를 연결해 추출 결과가 `skeleton`, `analysis`, `llmFeedback` 블록으로 반환되도록 구성했다.
+- `pyproject.toml`과 `uv.lock`에 `numpy`, `opencv-python-headless`를 반영해 OpenCV 기반 실행 환경을 맞췄다.
 
 ## 테스트 방법
 1. OpenCV 실행 환경에서 프레임 추출 모듈을 실행한다.

@@ -4,7 +4,7 @@
 >
 > 이 문서를 수정하는 AI 또는 작성자는 반드시 아래 짝 문서를 함께 확인해야 한다.
 >
-> - `C:\Users\neighbor\Documents\Code\Github\rack-tracker-forked\docs\OpenCV 기반 프레임 추출 기능 명세.md`
+> - `docs/features/opencv/spec.md`
 >
 > 규칙:
 >

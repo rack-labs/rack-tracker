@@ -82,7 +82,7 @@ hotfix/78-login-error
 
 커밋 전에 반드시 아래 문서를 먼저 확인한다.
 
-- `docs/Codex Commit and Push Workflow.md`
+- `docs/process/codex-commit-and-push-workflow.md`
 
 ### 커밋 메시지 구조
 
@@ -188,8 +188,8 @@ git checkout feature/xx-xxx
 
 commit 전에 아래 문서를 먼저 읽는다.
 
-- `docs/Git Collaboration Convention.md`
-- `docs/Codex Commit and Push Workflow.md`
+- `docs/process/git-collaboration-convention.md`
+- `docs/process/codex-commit-and-push-workflow.md`
 
 git add .
 git commit
