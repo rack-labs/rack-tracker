@@ -100,7 +100,14 @@ poseLandmarker_Python/
 │  ├─ opencv_adapter.py
 │  └─ mediapipe_adapter.py
 ├─ docs/
-│  └─ architecture.md
+│  ├─ README.md
+│  ├─ architecture/
+│  │  └─ architecture.md
+│  ├─ reference/
+│  │  └─ mediapipe/
+│  │     └─ pose-landmarker-guide.md
+│  └─ examples/
+│     └─ mediapipe-pose-landmarker.ipynb
 └─ tmp/
 ```
 

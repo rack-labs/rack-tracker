@@ -215,7 +215,13 @@ Motion Analysis Backend is running.
 - `schema/` : 요청과 응답 데이터 형식을 정하는 곳
 - `service/` : 실제 처리 로직이 들어가는 곳
 - `adapter/` : OpenCV, MediaPipe 같은 외부 라이브러리 연결부
-- `docs/` : 구조와 설계 문서
+- `docs/` : 목적별로 나눈 문서 모음
+
+`docs/`는 아래처럼 정리되어 있습니다.
+
+- `docs/architecture/` : 내부 아키텍처와 설계 문서
+- `docs/reference/` : 외부 기술 문서와 참고 자료
+- `docs/examples/` : 노트북과 샘플 예제
 
 처음 보는 팀원이라면 아래 순서로 읽는 것이 가장 쉽습니다.
 
