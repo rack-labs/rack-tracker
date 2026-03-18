@@ -165,6 +165,14 @@ Motion Analysis Backend is running.
 - `GET /jobs/{job_id}` : 작업 진행 상태를 확인하는 API
 - `GET /jobs/{job_id}/result` : 작업 결과를 가져오는 API
 
+## 현재 목업 비디오 동작
+
+백엔드와 프론트엔드 연결이 완료되기 전까지는 `POST /jobs`가 실제 업로드 파일 대신 아래 목업 비디오를 내부 소스로 사용합니다.
+
+- `src/video/backSquat.mp4`
+
+즉, 현재 단계에서는 파일을 첨부하지 않아도 job 생성이 가능하고, 결과의 `skeleton.videoInfo.videoSrc`는 위 목업 비디오 경로를 가리킵니다.
+
 ## 팀 협업용 안내
 
 이 프로젝트는 팀원 전체가 모든 코드를 다 이해해야 하는 구조를 목표로 하지 않습니다.

@@ -378,6 +378,8 @@ app.include_router(results.router)
 
 ## 10. 전체 흐름
 
+현재 백엔드와 프런트엔드가 완전히 연결되기 전까지는, 업로드 파일을 실제 처리하는 대신 `src/video/backSquat.mp4`를 목업 입력 소스로 사용한다.
+
 1. 사용자가 웹에서 비디오 파일과 FPS를 선택한다.
 2. 프런트가 `POST /jobs`로 파일과 옵션을 업로드한다.
 3. 서버는 job을 생성하고 즉시 `jobId`를 반환한다.
