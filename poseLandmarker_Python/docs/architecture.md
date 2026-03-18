@@ -2,6 +2,28 @@
 
 ## 1. 목적
 
+이 문서는 `poseLandmarker_Python`을 단순 MediaPipe 실험 폴더가 아니라, `uv` 기반 FastAPI 백엔드 프로젝트로 정리하기 위한 아키텍처 기준 문서다.
+
+참고한 스타일은 아래 예제다.
+
+- `C:\Users\neighbor\Documents\Code\Github\FastAPI\uv-based-fastapi\example`
+
+위 예제에서 가져올 핵심은 다음 네 가지다.
+
+1. `uv`를 기준으로 Python 실행 환경을 고정한다.
+2. `main.py`를 서버 실행 진입점으로 둔다.
+3. `app.py`에서 FastAPI 앱과 라우터를 조립한다.
+4. 기능별 폴더를 나눠서 API, 설정, 서비스 코드를 분리한다.
+
+우리 프로젝트는 예제보다 범위가 더 크다.
+
+- 예제: FastAPI 입문, 라우터 분리, MySQL 실습
+- 현재 프로젝트: 비디오 업로드, 포즈 추론, 운동역학 분석, LLM 피드백
+
+즉, 예제의 "실행 구조"는 그대로 참고하고, 도메인 로직만 우리 목적에 맞게 확장한다.
+
+## 2. 프로젝트 목표
+
 이 프로젝트는 웹에서 업로드한 운동 영상을 로컬 Python 서버로 보내고, 서버에서 다음 파이프라인을 수행하는 것을 목표로 한다.
 
 1. 비디오에서 프레임별 스켈레톤 데이터를 추출한다.
@@ -17,11 +39,12 @@
 - `C:\Users\neighbor\Documents\Code\Github\rack-tracker-forked\MVP.v1\video-pose-mvp\src`
 - `C:\Users\neighbor\Documents\Code\Github\rack-tracker-forked\MVP.v1\video-pose-mvp\index.html`
 
-## 2. 범위
+## 3. 범위
 
 ### 포함
 
 - 로컬 Python 서버 구현
+- `uv` 기반 의존성 관리
 - 비디오 업로드
 - 비동기 job 생성 및 상태 조회
 - OpenCV 기반 프레임 추출
@@ -44,14 +67,152 @@
 
 이 문서는 검증 목적 프로젝트를 전제로 하며, Python 서비스는 로컬 서버에서만 실행한다.
 
-## 3. 핵심 결정
+## 4. `uv` 기반 프로젝트 구조
 
-### 3.1 처리 위치
+참고 예제의 `uv-based-fastapi/example`처럼, 이 프로젝트도 "한 폴더 안에서 `uv sync` 후 `uv run main.py`"가 되는 구조를 목표로 한다.
+
+권장 구조는 아래와 같다.
+
+```text
+poseLandmarker_Python/
+├─ pyproject.toml
+├─ uv.lock
+├─ README.md
+├─ main.py
+├─ app.py
+├─ config/
+│  └─ config.py
+├─ controller/
+│  ├─ jobs.py
+│  ├─ health.py
+│  └─ results.py
+├─ schema/
+│  ├─ job.py
+│  └─ result.py
+├─ service/
+│  ├─ job_manager.py
+│  ├─ video_reader.py
+│  ├─ pose_inference.py
+│  ├─ skeleton_mapper.py
+│  ├─ analysis_pipeline.py
+│  └─ llm_feedback.py
+├─ adapter/
+│  ├─ opencv_adapter.py
+│  └─ mediapipe_adapter.py
+├─ docs/
+│  └─ architecture.md
+└─ tmp/
+```
+
+핵심 역할은 아래처럼 본다.
+
+- `main.py`
+  서버 실행 진입점
+- `app.py`
+  FastAPI 앱 생성과 라우터 등록
+- `config/config.py`
+  포트, 임시 디렉터리, 모델 경로, 외부 참조 경로 같은 설정
+- `controller/`
+  HTTP 엔드포인트
+- `schema/`
+  요청과 응답 모델
+- `service/`
+  실제 비즈니스 로직
+- `adapter/`
+  OpenCV와 MediaPipe 같은 외부 라이브러리 결합부
+
+참고 예제의 `controller`, `config`, `model` 분리 원칙은 그대로 유지하되, 현재 프로젝트에서는 DB 대신 비디오 처리와 추론 파이프라인이 핵심이므로 `service`와 `adapter` 비중이 더 커진다.
+
+## 5. 실행 방식
+
+FastAPI 예제의 흐름을 그대로 따라간다.
+
+1. 프로젝트 루트에 `pyproject.toml`을 둔다.
+2. `uv sync`로 의존성을 맞춘다.
+3. `uv run main.py`로 서버를 실행한다.
+4. `main.py`는 `uvicorn.run(app="app:app", ...)` 형태로 `app.py`의 `app` 객체를 로딩한다.
+5. `app.py`는 각 라우터를 등록한다.
+
+예상 실행 흐름:
+
+```text
+uv run main.py
+-> main.py
+-> uvicorn.run("app:app")
+-> app.py
+-> controller/jobs.py 등 라우터 등록
+-> service 계층 호출
+```
+
+초기 실행 명령은 아래 기준으로 문서화한다.
+
+```bash
+cd poseLandmarker_Python
+uv sync
+uv run main.py
+```
+
+개발 중 브라우저 확인 주소:
+
+- `http://127.0.0.1:8000/`
+- `http://127.0.0.1:8000/docs`
+
+포트는 `config/config.py`에서 관리한다.
+
+## 6. 초기 의존성 기준
+
+참고 예제의 `pyproject.toml`처럼 의존성을 `uv`에서 관리한다.
+
+초기 후보는 아래와 같다.
+
+- `fastapi`
+- `uvicorn`
+- `python-multipart`
+- `opencv-python`
+- `mediapipe`
+- `pydantic`
+- `numpy`
+- LLM 연동용 SDK 또는 HTTP 클라이언트
+
+원칙은 아래와 같다.
+
+- 실행과 직접 관련된 패키지는 `pyproject.toml`에 명시한다.
+- 버전 잠금은 `uv.lock`으로 관리한다.
+- 로컬 개발 재현성은 `uv sync` 한 번으로 맞춘다.
+
+## 7. 읽는 순서
+
+FastAPI 예제처럼 이 프로젝트도 처음 보는 사람이 아래 순서로 읽을 수 있어야 한다.
+
+1. `main.py`
+   서버를 어떻게 켜는지 확인
+2. `app.py`
+   라우터가 어디서 연결되는지 확인
+3. `controller/jobs.py`
+   업로드와 상태 조회 API 확인
+4. `service/job_manager.py`
+   job 상태가 어떻게 관리되는지 확인
+5. `service/video_reader.py`
+   비디오 프레임 추출 확인
+6. `service/pose_inference.py`
+   MediaPipe 추론 흐름 확인
+7. `service/analysis_pipeline.py`
+   분석 로직 확인
+8. `service/llm_feedback.py`
+   LLM 피드백 생성 확인
+9. `/docs`
+   API를 브라우저에서 확인
+
+즉, "서버 실행 -> 라우터 -> 서비스 -> 외부 라이브러리 결합부" 순서로 읽게 만드는 것이 목표다.
+
+## 8. 핵심 결정
+
+### 8.1 처리 위치
 
 - 브라우저: 업로드, 상태 표시, 오버레이 재생, 대시보드 렌더링, 시각화, 다운로드
 - Python 서버: 비디오 처리, 포즈 추론, 운동역학 분석, 지표 계산, LLM 피드백 생성, 결과 조립
 
-### 3.2 처리 방식
+### 8.2 처리 방식
 
 단일 요청-응답이 아니라 job 기반 비동기 처리로 간다.
 
@@ -62,7 +223,7 @@
 - 프런트에서 진행률을 보여줘야 한다.
 - 추출 단계와 분석 단계를 분리해 상태를 보여주는 것이 디버깅에 유리하다.
 
-### 3.3 결과 기준
+### 8.3 결과 기준
 
 백엔드의 최종 결과는 단순 스켈레톤 JSON이 아니라 아래 세 층을 모두 포함한 분석 결과다.
 
@@ -70,7 +231,7 @@
 - 운동역학 핵심 지표와 시계열 분석 데이터
 - LLM 피드백
 
-### 3.4 응답 구성 원칙
+### 8.4 응답 구성 원칙
 
 프런트가 다음 세 가지 UI를 모두 구성할 수 있어야 한다.
 
@@ -84,7 +245,7 @@
 - `analysis`
 - `llmFeedback`
 
-### 3.5 외부 참조 저장소 정책
+### 8.5 외부 참조 저장소 정책
 
 - OpenCV는 이 저장소 내부의 Git submodule로 유지한다.
 - MediaPipe는 Windows 경로 길이 제한 때문에 이 저장소 내부 submodule로 두지 않는다.
@@ -92,7 +253,130 @@
 - 현재 기준 MediaPipe 로컬 참조 경로는 `C:\src\mediapipe-forked`다.
 - 문서와 구현 참조는 이 외부 경로를 기준으로 유지한다.
 
-## 4. 전체 흐름
+## 9. 백엔드 계층 구조
+
+참고 예제의 `app.py -> controller -> model/config` 구조를 현재 프로젝트에 맞춰 확장하면 아래 6개 레이어가 된다.
+
+### 9.1 Entry Layer
+
+파일:
+
+- `main.py`
+
+책임:
+
+- `uv run main.py`의 시작점
+- `uvicorn.run(...)` 호출
+- 개발 모드용 host, port, reload 설정
+
+예상 형태:
+
+```python
+import uvicorn
+from config import config
+
+def main():
+    uvicorn.run(
+        app="app:app",
+        host=config.HOST,
+        port=config.PORT,
+        reload=True,
+    )
+
+if __name__ == "__main__":
+    main()
+```
+
+### 9.2 App Layer
+
+파일:
+
+- `app.py`
+
+책임:
+
+- `FastAPI()` 앱 생성
+- 라우터 등록
+- 루트 health endpoint 제공
+
+예상 형태:
+
+```python
+from fastapi import FastAPI
+from controller import health, jobs, results
+
+app = FastAPI()
+
+app.include_router(health.router)
+app.include_router(jobs.router)
+app.include_router(results.router)
+```
+
+### 9.3 API Layer
+
+파일:
+
+- `controller/jobs.py`
+- `controller/results.py`
+- `controller/health.py`
+
+책임:
+
+- 파일 업로드 받기
+- job 생성
+- 상태 조회 응답
+- 결과 조회 응답
+
+예상 엔드포인트:
+
+- `GET /`
+- `POST /jobs`
+- `GET /jobs/{jobId}`
+- `GET /jobs/{jobId}/result`
+
+### 9.4 Service Layer
+
+파일:
+
+- `service/job_manager.py`
+- `service/video_reader.py`
+- `service/pose_inference.py`
+- `service/skeleton_mapper.py`
+- `service/analysis_pipeline.py`
+- `service/llm_feedback.py`
+
+책임:
+
+- HTTP와 무관한 도메인 로직 수행
+- 단계별 파이프라인 조립
+- 에러와 진행률 상태 관리
+
+### 9.5 Adapter Layer
+
+파일:
+
+- `adapter/opencv_adapter.py`
+- `adapter/mediapipe_adapter.py`
+
+책임:
+
+- 외부 라이브러리 API 차이를 내부 인터페이스로 감춤
+- OpenCV 프레임 읽기와 MediaPipe 입력 변환을 분리
+
+### 9.6 Schema Layer
+
+파일:
+
+- `schema/job.py`
+- `schema/result.py`
+
+책임:
+
+- 요청 검증
+- 응답 직렬화
+- 프런트와의 계약 고정
+
+## 10. 전체 흐름
 
 1. 사용자가 웹에서 비디오 파일과 FPS를 선택한다.
 2. 프런트가 `POST /jobs`로 파일과 옵션을 업로드한다.
@@ -106,26 +390,9 @@
 10. 프런트는 `GET /jobs/{jobId}/result`를 호출한다.
 11. 프런트는 `skeleton` 데이터를 오버레이에 쓰고, `analysis`와 `llmFeedback`을 대시보드와 시각화에 사용한다.
 
-## 5. 백엔드 구성
+## 11. 세부 서비스 설계
 
-최소 구성은 다음 6개 레이어로 나눈다.
-
-### 5.1 API 레이어
-
-책임:
-
-- 파일 업로드 받기
-- job 생성
-- 상태 조회 응답
-- 결과 조회 응답
-
-예상 엔드포인트:
-
-- `POST /jobs`
-- `GET /jobs/{jobId}`
-- `GET /jobs/{jobId}/result`
-
-### 5.2 Job 관리 레이어
+### 11.1 Job 관리 레이어
 
 책임:
 
@@ -137,7 +404,9 @@
 
 초기 구현은 인메모리 딕셔너리로 충분하다.
 
-### 5.3 비디오 처리 레이어
+FastAPI 예제의 DB 접근 코드처럼 별도 파일로 분리하되, 현재는 영속 저장소 대신 메모리 저장을 사용한다.
+
+### 11.2 비디오 처리 레이어
 
 책임:
 
@@ -147,23 +416,19 @@
 
 초기 구현은 OpenCV만 사용한다.
 
-추후 최적화가 필요하면 디코딩만 ffmpeg로 교체할 수 있지만, 현재 범위에는 포함하지 않는다.
-
 구현 참조:
 
 - OpenCV 공개 API 선언: `C:\Users\neighbor\Documents\Code\Github\rack-tracker-forked\third_party\opencv\opencv-forked\modules\videoio\include\opencv2\videoio.hpp`
 - 프레임 단위 위치 제어 상수: `CAP_PROP_POS_FRAMES`
 - OpenCV `VideoCapture` 구현 진입점: `C:\Users\neighbor\Documents\Code\Github\rack-tracker-forked\third_party\opencv\opencv-forked\modules\videoio\src\cap.cpp`
-- 실제 읽기 흐름은 `VideoCapture::read()`가 `grab()`와 `retrieve()`를 묶는 구조다.
-- 따라서 우리 Python 백엔드의 프레임 추출 레이어도 "영상 열기 -> 필요 시 seek 또는 샘플링 -> 프레임 읽기 -> timestamp 계산" 순서로 맞추는 것이 자연스럽다.
 
-현재 프로젝트에서 참고해야 할 설계 포인트:
+설계 포인트:
 
 - 브라우저 내부 seek 기반 추출을 유지하지 않고, 서버에서 OpenCV로 프레임을 직접 읽는다.
 - 목표 FPS가 원본 FPS보다 낮으면 모든 프레임을 저장하지 말고 서버에서 샘플링한다.
-- timestamp는 프레임 카운터만 믿지 말고 원본 FPS와 샘플링 규칙을 함께 기록해 재현 가능하게 만든다.
+- timestamp는 원본 FPS와 샘플링 규칙을 함께 기록해 재현 가능하게 만든다.
 
-### 5.4 포즈 추론 레이어
+### 11.3 포즈 추론 레이어
 
 책임:
 
@@ -174,20 +439,16 @@
 구현 참조:
 
 - Python 태스크 래퍼: `C:\src\mediapipe-forked\mediapipe\tasks\python\vision\pose_landmarker.py`
-- `PoseLandmarker` 클래스 정의가 이 파일에 있고, `create_from_options()`로 태스크를 만들고 `detect_for_video()`로 비디오 모드 추론을 수행한다.
-- Python 래퍼는 내부적으로 `MpPoseLandmarkerDetectForVideo` 네이티브 엔트리포인트를 호출하고 결과를 `PoseLandmarkerResult`로 변환한다.
 - C++ 태스크 구현: `C:\src\mediapipe-forked\mediapipe\tasks\cc\vision\pose_landmarker\pose_landmarker.cc`
 - 내부 그래프 정의: `C:\src\mediapipe-forked\mediapipe\tasks\cc\vision\pose_landmarker\pose_landmarker_graph.cc`
-- MediaPipe 내부적으로는 `PoseLandmarkerGraph`를 구성해 detector와 landmark tracking 파이프라인을 실행한다.
 
-현재 프로젝트에서 참고해야 할 설계 포인트:
+설계 포인트:
 
-- 서버는 프레임마다 `detect()`를 새로 호출하는 방식보다, 비디오 입력이면 `detect_for_video()` 모드에 맞는 timestamp 규약을 유지하는 편이 맞다.
-- 추론 입력은 OpenCV `Mat`을 그대로 쓰지 않고 MediaPipe가 요구하는 이미지 타입으로 변환하는 어댑터 레이어가 필요하다.
-- 결과 저장 시 normalized landmark와 world landmark 중 어떤 것을 분석 파이프라인 표준 입력으로 쓸지 초기에 고정해야 한다.
-- MediaPipe 결과 객체를 바로 프런트 포맷으로 누출하지 말고, 프로젝트 런타임 스키마로 한 번 정규화한다.
+- 서버는 비디오 입력에 맞는 `detect_for_video()` timestamp 규약을 유지한다.
+- 추론 입력은 OpenCV 프레임을 MediaPipe가 요구하는 이미지 타입으로 변환하는 어댑터 레이어를 둔다.
+- MediaPipe 결과 객체를 바로 프런트 포맷으로 노출하지 말고, 프로젝트 런타임 스키마로 한 번 정규화한다.
 
-### 5.5 운동역학 분석 레이어
+### 11.4 운동역학 분석 레이어
 
 책임:
 
@@ -199,9 +460,7 @@
 
 이 레이어는 LLM 없이도 독립적으로 동작해야 한다.
 
-즉, 분석 지표는 규칙 기반 또는 수치 계산 기반으로 먼저 산출되어야 한다.
-
-### 5.6 LLM 피드백 레이어
+### 11.5 LLM 피드백 레이어
 
 책임:
 
@@ -212,9 +471,9 @@
 
 LLM은 원본 프레임 전체를 직접 해석하는 것이 아니라, 분석 레이어가 정제한 구조화 데이터를 입력으로 받는다.
 
-## 6. Job 상태 모델
+## 12. Job 상태 모델
 
-job 상태는 아래 다섯 단계로 관리한다.
+job 상태는 아래 단계로 관리한다.
 
 - `queued`
 - `extracting`
@@ -230,9 +489,9 @@ job 상태는 아래 다섯 단계로 관리한다.
 
 취소 기능은 현재 범위에서 제외한다.
 
-## 7. API 계약
+## 13. API 계약
 
-### 7.1 `POST /jobs`
+### 13.1 `POST /jobs`
 
 설명:
 
@@ -255,13 +514,7 @@ job 상태는 아래 다섯 단계로 관리한다.
 }
 ```
 
-검증 규칙:
-
-- `video` 누락 시 400
-- `fps`가 숫자가 아니거나 0 이하이면 400
-- `exerciseType`이 없으면 기본 운동 분류 또는 단일 운동 전제 정책 적용
-
-### 7.2 `GET /jobs/{jobId}`
+### 13.2 `GET /jobs/{jobId}`
 
 설명:
 
@@ -283,21 +536,7 @@ job 상태는 아래 다섯 단계로 관리한다.
 }
 ```
 
-실패 시 예시:
-
-```json
-{
-  "jobId": "job_0001",
-  "status": "failed",
-  "progress": null,
-  "error": {
-    "code": "POSE_INFERENCE_FAILED",
-    "message": "Pose inference failed for the uploaded video."
-  }
-}
-```
-
-### 7.3 `GET /jobs/{jobId}/result`
+### 13.3 `GET /jobs/{jobId}/result`
 
 설명:
 
@@ -307,111 +546,17 @@ job 상태는 아래 다섯 단계로 관리한다.
 
 - `status == completed` 인 경우에만 200 반환
 
-응답 형식:
+응답은 아래 세 블록을 포함한다.
 
-```json
-{
-  "skeleton": {
-    "frames": [
-      {
-        "frameIndex": 0,
-        "time": 0.0,
-        "landmarks": [
-          {
-            "id": 0,
-            "jointName": "nose",
-            "x": 0.5,
-            "y": 0.4,
-            "z": -0.1,
-            "visibility": 0.98
-          }
-        ]
-      }
-    ],
-    "videoInfo": {
-      "videoSrc": "local-upload.mp4",
-      "fps": 30,
-      "duration": 12.34,
-      "createdAt": "2026-03-18T00:00:00.000Z"
-    },
-    "nextTimestampCursorMs": 13340
-  },
-  "analysis": {
-    "summary": {
-      "exerciseType": "squat",
-      "repCount": 5,
-      "qualityScore": 78
-    },
-    "kpis": [
-      {
-        "key": "max_knee_flexion_deg",
-        "label": "Max Knee Flexion",
-        "value": 112.4,
-        "unit": "deg"
-      }
-    ],
-    "timeseries": [
-      {
-        "key": "hip_angle_deg",
-        "label": "Hip Angle",
-        "unit": "deg",
-        "points": [
-          {
-            "time": 0.0,
-            "value": 165.0
-          }
-        ]
-      }
-    ],
-    "events": [
-      {
-        "key": "bottom_position",
-        "label": "Bottom Position",
-        "time": 1.42
-      }
-    ],
-    "repSegments": [
-      {
-        "repIndex": 0,
-        "startTime": 0.3,
-        "endTime": 2.1
-      }
-    ],
-    "issues": [
-      {
-        "code": "KNEE_VALGUS",
-        "severity": "medium",
-        "message": "Knees move inward near the bottom position."
-      }
-    ]
-  },
-  "llmFeedback": {
-    "version": "v1",
-    "model": "local-or-api-model",
-    "overallComment": "Depth is sufficient, but knee tracking becomes unstable near the bottom.",
-    "highlights": [
-      "Hip depth is generally consistent across reps."
-    ],
-    "corrections": [
-      "Keep knees aligned with toes during descent."
-    ],
-    "coachCue": "Push the knees out and keep the chest stacked over the mid-foot."
-  }
-}
-```
+- `skeleton`
+- `analysis`
+- `llmFeedback`
 
-주의:
+## 14. 데이터 계약
 
-- `skeleton`은 오버레이용이다.
-- `analysis`는 대시보드와 차트용이다.
-- `llmFeedback`은 텍스트 피드백 UI용이다.
-- 다운로드 포맷이 필요하면 프런트에서 별도로 생성한다.
+### 14.1 `skeleton`
 
-## 8. 데이터 계약
-
-## 8.1 `skeleton`
-
-기존 프런트 내부 런타임 포맷을 유지한다.
+오버레이 렌더링용 데이터다.
 
 포함 필드:
 
@@ -419,75 +564,22 @@ job 상태는 아래 다섯 단계로 관리한다.
 - `videoInfo`
 - `nextTimestampCursorMs`
 
-### 8.2 `analysis.summary`
+### 14.2 `analysis`
 
-대시보드 상단 요약 정보다.
+대시보드와 차트용 데이터다.
 
-예상 필드:
+포함 필드:
 
-- `exerciseType`
-- `repCount`
-- `qualityScore`
-- `analysisVersion`
+- `summary`
+- `kpis`
+- `timeseries`
+- `events`
+- `repSegments`
+- `issues`
 
-### 8.3 `analysis.kpis`
+### 14.3 `llmFeedback`
 
-핵심 지표 카드용 데이터다.
-
-각 항목은 아래 필드를 가진다.
-
-- `key`
-- `label`
-- `value`
-- `unit`
-- `benchmark` 또는 `referenceRange` 선택적 포함
-
-### 8.4 `analysis.timeseries`
-
-차트 렌더링용 시계열 데이터다.
-
-각 항목은 아래 필드를 가진다.
-
-- `key`
-- `label`
-- `unit`
-- `points`
-
-각 point는 아래 필드를 가진다.
-
-- `time`
-- `value`
-
-### 8.5 `analysis.events`
-
-중요 포지션 또는 이벤트 마커용 데이터다.
-
-예:
-
-- 바닥 지점
-- 최대 속도 지점
-- 락아웃 시점
-
-### 8.6 `analysis.repSegments`
-
-반복 동작 구간 분할 정보다.
-
-프런트는 이 데이터를 기반으로 rep 단위 탐색 UI를 만들 수 있다.
-
-### 8.7 `analysis.issues`
-
-규칙 기반 분석으로 탐지한 문제 목록이다.
-
-각 항목은 아래 필드를 가진다.
-
-- `code`
-- `severity`
-- `message`
-- `timeRange` 또는 `repIndex` 선택적 포함
-
-### 8.8 `llmFeedback`
-
-LLM이 생성한 사용자 친화적 피드백이다.
+사용자 친화적 텍스트 피드백이다.
 
 포함 필드:
 
@@ -500,127 +592,49 @@ LLM이 생성한 사용자 친화적 피드백이다.
 
 LLM 응답은 원본 사실을 새로 만들어내는 것이 아니라 `analysis`에 근거한 설명이어야 한다.
 
-## 9. 분석 파이프라인 설계 원칙
+## 15. 구현 원칙
 
-### 9.1 단계 분리
+### 15.1 FastAPI 예제에서 그대로 가져올 원칙
 
-분석 파이프라인은 아래 순서로 분리한다.
+- 실행 진입점은 `main.py` 하나로 고정한다.
+- 앱 조립은 `app.py`에서만 한다.
+- 엔드포인트는 `controller`로 분리한다.
+- 설정은 `config`로 분리한다.
+- 로컬 개발자는 `uv sync`, `uv run main.py`, `/docs` 이 세 가지만 먼저 기억하면 된다.
 
-1. 스켈레톤 정규화
-2. 파생 특징 계산
-3. 운동 구간 분할
-4. 핵심 지표 계산
-5. 문제 패턴 탐지
-6. 대시보드용 구조화
-7. LLM 프롬프트 입력 조립
-8. LLM 피드백 생성
+### 15.2 현재 프로젝트에서 추가로 필요한 원칙
 
-### 9.2 LLM 의존성 최소화
+- 무거운 로직은 controller에서 처리하지 않고 service로 넘긴다.
+- 외부 라이브러리 결합부는 adapter로 감싼다.
+- 결과 포맷은 schema로 고정한다.
+- 정량 분석은 LLM 이전에 끝낸다.
+- 같은 입력에 대한 `analysis` 결과는 deterministic 해야 한다.
 
-정량 지표와 문제 탐지는 LLM 이전에 계산 완료되어야 한다.
+## 16. 구현 순서
 
-즉, 아래는 LLM 책임이 아니다.
+1. `poseLandmarker_Python`를 `uv` 프로젝트로 초기화한다.
+2. `pyproject.toml`, `main.py`, `app.py`, `config/config.py`를 만든다.
+3. `POST /jobs`, `GET /jobs/{jobId}`, `GET /jobs/{jobId}/result`를 구현한다.
+4. 인메모리 job manager를 만든다.
+5. OpenCV 프레임 추출을 붙인다.
+6. MediaPipe Pose Landmarker를 붙인다.
+7. 스켈레톤 런타임 포맷 변환기를 구현한다.
+8. 운동역학 분석 파이프라인 골격을 구현한다.
+9. LLM 입력과 응답 스키마를 정의한다.
+10. 프런트 polling 및 결과 소비 구조를 연결한다.
 
-- 관절각 계산
-- rep count 계산
-- 이벤트 타이밍 검출
-- 품질 점수 계산
-
-LLM 책임은 아래로 제한한다.
-
-- 핵심 지표 요약
-- 사용자 친화적 설명
-- 교정 큐 생성
-
-### 9.3 재현 가능성
-
-같은 입력 JSON에 대해 분석 결과는 동일해야 한다.
-
-LLM 피드백은 일부 표현 차이가 있을 수 있으나, 근거가 되는 `analysis` 데이터는 deterministic 해야 한다.
-
-## 10. 프런트엔드 소비 기준
-
-프런트는 결과를 세 영역으로 소비한다.
-
-### 10.1 오버레이
-
-- `result.skeleton.frames`
-- `result.skeleton.videoInfo`
-
-### 10.2 대시보드 KPI
-
-- `result.analysis.summary`
-- `result.analysis.kpis`
-- `result.analysis.issues`
-
-### 10.3 시각화
-
-- `result.analysis.timeseries`
-- `result.analysis.events`
-- `result.analysis.repSegments`
-
-### 10.4 피드백 패널
-
-- `result.llmFeedback.overallComment`
-- `result.llmFeedback.highlights`
-- `result.llmFeedback.corrections`
-- `result.llmFeedback.coachCue`
-
-## 11. 파일 처리 정책
-
-로컬 서버 한정 프로젝트이므로 단순한 정책을 사용한다.
-
-- 업로드 파일은 임시 디렉터리에 저장한다.
-- job 완료 또는 실패 후 임시 파일을 삭제한다.
-- 프레임 이미지는 디스크에 저장하지 않는다.
-- 스켈레톤 JSON과 분석 결과는 메모리에서 조립한다.
-
-대용량 파일 대응은 현재 범위 밖이지만, 최소한 업로드 크기 제한은 둔다.
-
-## 12. 에러 처리 원칙
-
-백엔드는 내부 예외를 그대로 노출하지 않고, 프런트가 표시 가능한 코드와 메시지로 변환한다.
-
-최소 에러 코드 예시:
-
-- `INVALID_REQUEST`
-- `UNSUPPORTED_VIDEO`
-- `VIDEO_DECODE_FAILED`
-- `POSE_INFERENCE_FAILED`
-- `ANALYSIS_FAILED`
-- `LLM_FEEDBACK_FAILED`
-- `JOB_NOT_FOUND`
-- `JOB_NOT_COMPLETED`
-
-LLM 피드백 단계가 실패했을 때의 정책은 둘 중 하나로 고정해야 한다.
-
-- 엄격 모드: LLM 실패 시 job 전체를 `failed`
-- 완화 모드: `analysis`만 반환하고 `llmFeedback`은 빈 값으로 반환
-
-현재 검증 목적 단계에서는 완화 모드가 더 실용적이다.
-
-## 13. 구현 순서
-
-1. Python 로컬 서버 뼈대 생성
-2. `POST /jobs`, `GET /jobs/{jobId}`, `GET /jobs/{jobId}/result` 구현
-3. OpenCV 프레임 추출 구현
-4. MediaPipe Pose Landmarker 연결
-5. 스켈레톤 런타임 포맷 변환기 구현
-6. 운동역학 분석 파이프라인 골격 구현
-7. KPI, 시계열, 이벤트, 이슈 구조 정의
-8. LLM 입력 프롬프트와 응답 스키마 정의
-9. 프런트 polling 및 결과 소비 구조 연결
-10. 오버레이, 대시보드, 시각화, 피드백 UI 회귀 확인
-
-## 14. 완료 기준
+## 17. 완료 기준
 
 아래 조건을 만족하면 1차 목표를 달성한 것으로 본다.
 
-- 웹에서 로컬 비디오 업로드 가능
-- job 상태가 polling으로 보임
-- 완료 시 오버레이가 정상 작동
-- 대시보드 KPI가 표시됨
-- 시계열 차트가 렌더링됨
-- 분석 이슈가 표시됨
-- LLM 피드백이 함께 표시됨
-- 브라우저 내부 seek 기반 추출 로직이 제거됨
+- `poseLandmarker_Python` 폴더에서 `uv sync`가 된다.
+- `uv run main.py`로 FastAPI 서버가 뜬다.
+- `/docs`에서 API 확인이 된다.
+- 웹에서 로컬 비디오 업로드가 가능하다.
+- job 상태가 polling으로 보인다.
+- 완료 시 오버레이가 정상 작동한다.
+- 대시보드 KPI가 표시된다.
+- 시계열 차트가 렌더링된다.
+- 분석 이슈가 표시된다.
+- LLM 피드백이 함께 표시된다.
+- 브라우저 내부 seek 기반 추출 로직이 제거된다.

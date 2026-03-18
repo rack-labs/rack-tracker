@@ -1,0 +1,19 @@
+[project]
+name = "pose-landmarker-python"
+version = "0.1.0"
+description = "FastAPI backend skeleton for motion analysis with pose landmark extraction."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",
+    "pydantic>=2.8.0",
+    "python-multipart>=0.0.9",
+    "uvicorn>=0.30.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+package = false
