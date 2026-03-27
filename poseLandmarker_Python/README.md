@@ -166,7 +166,9 @@ Motion Analysis Backend is running.
 - `GET /` : 백엔드 서버가 켜져 있는지 확인하는 간단한 주소
 - `POST /jobs` : 새 작업을 생성하는 API
 - `GET /jobs/{job_id}` : 작업 진행 상태를 확인하는 API
-- `GET /jobs/{job_id}/result` : 작업 결과를 가져오는 API
+- `GET /jobs/{job_id}/result` : 요약 결과를 가져오는 API
+- `GET /jobs/{job_id}/skeleton` : 스켈레톤 프레임을 페이지 단위로 가져오는 API
+- `GET /jobs/{job_id}/skeleton/download` : 스켈레톤 JSON 파일을 다운로드하는 API
 - `GET /jobs/{job_id}/benchmark` : benchmark summary를 가져오는 API
 - `GET /jobs/{job_id}/benchmark/frames` : frame-level benchmark 상세를 가져오는 API
 
@@ -180,10 +182,14 @@ Motion Analysis Backend is running.
 
 ## benchmark 결과는 어디에서 보나요?
 
-이제 작업이 완료되면 결과에 `benchmark` 블록이 함께 포함됩니다.
+이제 작업이 완료되면 `/result`에는 summary 중심 결과가 들어가고, 무거운 skeleton frame payload는 별도 API로 분리됩니다.
 
 - `/jobs/{job_id}/result`
-  - 스켈레톤, 분석, LLM 피드백과 함께 benchmark summary를 포함합니다.
+  - `skeleton.videoInfo`, `skeleton.nextTimestampCursorMs`, `analysis`, `llmFeedback`, `benchmark`를 반환합니다.
+- `/jobs/{job_id}/skeleton`
+  - `offset`, `limit` 기반으로 skeleton frame 일부만 반환합니다.
+- `/jobs/{job_id}/skeleton/download`
+  - skeleton 전체 JSON을 attachment 다운로드로 반환합니다.
 - `/jobs/{job_id}/benchmark`
   - 비교 차트나 요약 카드에 쓰기 좋은 summary 중심 응답을 반환합니다.
 - `/jobs/{job_id}/benchmark/frames`
@@ -194,7 +200,7 @@ Motion Analysis Backend is running.
 - 단계별 시간: `frameExtractionMs`, `rgbConversionMs`, `inferenceMs`, `serializationMs`, `analysisMs`, `totalElapsedMs`
 - 실행 메타데이터: `requestedDelegate`, `actualDelegate`, `delegateFallbackApplied`, `modelVariant`, `frameCount`, `sampleIntervalMs`
 - 품질 지표: `poseDetectedRatio`, `detectedFrameCount`, `avgVisibility`, `minVisibility`, `lowVisibilityFrameRatio`, `consecutiveMissedPoseMax`
-- 저장 위치: `tmp/benchmarks/*.summary.json`, `tmp/benchmarks/*.frames.json`
+- 저장 위치: `tmp/benchmarks/*.summary.json`, `tmp/benchmarks/*.frames.json`, `tmp/skeletons/*.json`
 
 ## 팀 협업용 안내
 
@@ -403,7 +409,8 @@ OpenCV, MediaPipe 같은 외부 라이브러리를 프로젝트 코드와 연결
 5. 포즈를 추론해서 스켈레톤 데이터를 만듭니다.
 6. 분석 파이프라인이 스켈레톤 데이터를 받아 분석합니다.
 7. 분석 결과를 바탕으로 필요하면 LLM 피드백을 만듭니다.
-8. 최종 결과를 `GET /jobs/{job_id}/result`로 돌려줍니다.
+8. 요약 결과를 `GET /jobs/{job_id}/result`로 돌려줍니다.
+9. 필요하면 skeleton frame은 `GET /jobs/{job_id}/skeleton` 또는 `GET /jobs/{job_id}/skeleton/download`로 조회합니다.
 
 여기서 데이터분석 담당자가 가장 중요하게 볼 부분은 5번 이후입니다.
 즉, "스켈레톤 데이터가 만들어진 뒤 어떤 분석 결과를 만들 것인가"가 핵심입니다.

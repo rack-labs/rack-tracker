@@ -7,6 +7,7 @@ TEMP_DIR = BASE_DIR / "tmp"
 UPLOAD_DIR = TEMP_DIR / "uploads"
 EXTRACTED_FRAME_DIR = TEMP_DIR / "frames"
 BENCHMARK_DIR = TEMP_DIR / "benchmarks"
+SKELETON_DIR = TEMP_DIR / "skeletons"
 MODEL_DIR = BASE_DIR / "models" / "mediapipe"
 MODEL_ASSET_PATHS = {
     "lite": MODEL_DIR / "pose_landmarker_lite.task",
@@ -22,4 +23,5 @@ TEMP_DIR.mkdir(parents=True, exist_ok=True)
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 EXTRACTED_FRAME_DIR.mkdir(parents=True, exist_ok=True)
 BENCHMARK_DIR.mkdir(parents=True, exist_ok=True)
+SKELETON_DIR.mkdir(parents=True, exist_ok=True)
 MODEL_DIR.mkdir(parents=True, exist_ok=True)

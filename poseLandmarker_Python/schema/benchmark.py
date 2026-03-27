@@ -23,6 +23,7 @@ class BenchmarkRunMetadata(BaseModel):
     requestedDelegate: str
     actualDelegate: str
     delegateFallbackApplied: bool
+    delegateErrors: dict[str, str] = Field(default_factory=dict)
     modelVariant: str
     runningMode: str
     frameCount: int

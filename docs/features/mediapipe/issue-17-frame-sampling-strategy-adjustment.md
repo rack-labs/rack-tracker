@@ -59,3 +59,22 @@
 - `poseLandmarker_Python/service/video_reader.py`
 - `poseLandmarker_Python/service/benchmarking.py`
 - `poseLandmarker_Python/docs/optimization/performance-summary.md`
+
+## 작업 결과 요약
+- `POST /jobs`에서 분석용 샘플링 FPS를 선택 입력으로 받을 수 있도록 `samplingFps`를 추가했고, 기존 `fps`는 하위 호환 입력으로 유지했다.
+- 서버는 실제 영상 메타데이터에서 `sourceVideoFps`를 읽고, 최종 분석 FPS를 `min(requestedSamplingFps, sourceVideoFps)` 규칙으로 결정하도록 수정했다.
+- 사용자가 샘플링 FPS를 입력하지 않으면 실제 영상 FPS를 그대로 사용하도록 기본 정책을 변경했다.
+- `videoInfo`와 benchmark run metadata에 `requestedSamplingFps`, `effectiveSamplingFps`, `sourceVideoFps`를 함께 기록하도록 정리했다.
+- benchmark의 `sampleIntervalMs`는 실제 적용된 분석 FPS 기준으로 계산되도록 수정했다.
+
+## 반영 파일
+- `poseLandmarker_Python/controller/jobs.py`
+- `poseLandmarker_Python/service/job_manager.py`
+- `poseLandmarker_Python/service/video_reader.py`
+- `poseLandmarker_Python/service/skeleton_mapper.py`
+- `poseLandmarker_Python/service/benchmarking.py`
+- `poseLandmarker_Python/schema/benchmark.py`
+
+## 검증
+- `python3 -m py_compile`로 관련 Python 파일 문법 검증 완료
+- 현재 작업 커밋: `48c93b6`
