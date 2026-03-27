@@ -81,6 +81,7 @@ class BenchmarkService:
                 requestedDelegate=inference_result.requested_delegate,
                 actualDelegate=inference_result.actual_delegate,
                 delegateFallbackApplied=inference_result.delegate_fallback_applied,
+                delegateErrors=inference_result.delegate_errors,
                 modelVariant=Path(inference_result.model_name).stem.replace("pose_landmarker_", ""),
                 runningMode=inference_result.running_mode,
                 frameCount=inference_result.frame_count,

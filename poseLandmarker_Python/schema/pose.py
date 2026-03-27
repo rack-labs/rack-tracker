@@ -121,4 +121,5 @@ class PoseInferenceResult:
     requested_delegate: Delegate
     actual_delegate: Delegate
     delegate_fallback_applied: bool
+    delegate_errors: dict[str, str]
     frames: list[PoseFrameResult]

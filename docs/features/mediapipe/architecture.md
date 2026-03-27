@@ -1,4 +1,4 @@
-# MediaPipe 기반 포즈 랜드마커 기능 아키텍처 초안
+# MediaPipe 기반 포즈 랜드마커 기능 아키텍처
 
 > 문서 동기화 강제 프롬프트
 >
@@ -27,151 +27,267 @@
 
 ## 1. 목적
 
-`poseLandmarker_Python` 백엔드에 MediaPipe 기반 포즈 랜드마커 계층을 추가해 다음 요구를 충족한다.
+현재 `poseLandmarker_Python` 백엔드는 MediaPipe Pose Landmarker를 실제 분석 파이프라인 안에 연결해 아래 흐름을 제공한다.
 
-- 비디오 또는 이미지에서 사람 포즈를 안정적으로 추론한다.
-- 추론 결과를 프레임 메타데이터와 함께 후속 분석 계층에 전달한다.
-- MediaPipe 내부 세부사항을 adapter 계층에 숨겨, 서비스 계층이 라이브러리 구현에 직접 결합되지 않게 한다.
-- 현재 목업 추론 구조를 실제 MediaPipe Tasks Vision 기반 구현으로 자연스럽게 대체할 수 있게 한다.
+- 업로드 비디오 또는 기본 목업 비디오를 입력으로 받는다.
+- OpenCV 기반 프레임 추출을 수행한다.
+- MediaPipe Pose Landmarker로 프레임별 33개 랜드마크를 추론한다.
+- 결과를 `skeleton`, `analysis`, `llmFeedback`, `benchmark` 구조로 정리한다.
+- 상태 조회, 결과 조회, 스켈레톤 다운로드, benchmark 조회 API를 제공한다.
 
-## 2. 참고한 코드베이스 관찰
+이 문서는 2026-03-27 기준 저장소 구현을 설명한다. 더 이상 `목업 추론을 실제 MediaPipe로 대체할 예정`인 설계 문서가 아니라, 현재 동작 중인 구현 문서다.
 
-### 현재 프로젝트 관찰
+## 2. 현재 구현 관찰
 
-- `adapter/mediapipe_adapter.py`는 현재 `PoseLandmarker` 생성, `detect_for_video()`, GPU 우선 후 CPU fallback, `mp.Image` 변환까지 담당한다.
-- `service/pose_inference.py`는 현재 `list[ExtractedFrame]`를 받아 실제 MediaPipe 추론을 수행하고 33개 2D 랜드마크를 직렬화한다.
-- `service/skeleton_mapper.py`는 추론 결과를 `skeleton.frames`, `skeleton.videoInfo` 구조로 정리한다.
-- `service/job_manager.py`는 현재 `video_reader -> pose_inference -> skeleton_mapper`까지를 MVP 기본 흐름으로 본다.
-- `service/job_manager.py`는 현재 job 생성 시점에 `modelAssetPath`, `modelVariant`, `delegate`를 먼저 검증한 뒤, 런타임에는 `video_reader -> pose_inference -> skeleton_mapper` 흐름을 오케스트레이션한다.
-- `service/benchmarking.py`는 프레임별 계측값을 집계해 benchmark summary와 frame-level 상세를 저장하는 역할로 추가됐다.
-- `schema/frame.py`에는 이미 `ExtractedFrame`, `FrameExtractionResult`가 정의돼 있어 포즈 추론 입력 모델로 재사용하기 좋다.
-- `schema/pose.py`에는 `PoseInferenceOptions`, `PoseFrameResult`, `PoseInferenceResult`와 MediaPipe 연동 예외들이 정의돼 있다.
-- `schema/benchmark.py`에는 benchmark run metadata, timing summary, quality summary, frame metrics 응답 모델이 정의돼 있다.
-- 기본 모델 파일 `pose_landmarker_full.task`는 현재 저장소의 `poseLandmarker_Python/models/mediapipe/` 아래에 포함돼 있다.
+### 핵심 모듈
 
-### MediaPipe 연동 관찰
+- `poseLandmarker_Python/controller/jobs.py`
+  - `POST /jobs`
+  - 업로드 파일 저장 또는 기본 목업 비디오 선택
+  - `samplingFps`, `exerciseType`, `modelAssetPath`, `modelVariant`, `delegate`를 `JobManager`로 전달
+- `poseLandmarker_Python/controller/results.py`
+  - `GET /jobs/{job_id}/result`
+  - `GET /jobs/{job_id}/skeleton`
+  - `GET /jobs/{job_id}/skeleton/download`
+  - `GET /jobs/{job_id}/benchmark`
+  - `GET /jobs/{job_id}/benchmark/frames`
+- `poseLandmarker_Python/service/job_manager.py`
+  - 전체 파이프라인 오케스트레이션
+  - job 상태 및 메모리 저장소 관리
+  - 무거운 단계의 `asyncio.to_thread()` 오프로딩
+- `poseLandmarker_Python/service/video_reader.py`
+  - 비디오 프레임 추출
+- `poseLandmarker_Python/service/pose_inference.py`
+  - 프레임별 MediaPipe 추론 실행
+  - 33개 랜드마크 직렬화
+  - 프레임별 benchmark 측정치 생성
+- `poseLandmarker_Python/adapter/mediapipe_adapter.py`
+  - MediaPipe import
+  - `PoseLandmarker` 생성/종료
+  - GPU 우선, CPU fallback 초기화
+- `poseLandmarker_Python/service/skeleton_mapper.py`
+  - `skeleton.frames`, `skeleton.videoInfo`, `nextTimestampCursorMs` 생성
+- `poseLandmarker_Python/service/analysis_pipeline.py`
+  - 기본 분석 결과 생성
+- `poseLandmarker_Python/service/benchmarking.py`
+  - summary/detail benchmark 결과 생성 및 파일 저장
+- `poseLandmarker_Python/service/llm_feedback.py`
+  - 현재는 rule-based placeholder 피드백 생성
 
-- 현재 저장소에는 `poseLandmarker_Python/docs/reference/mediapipe/pose-landmarker-guide.md` 문서가 포함돼 있다.
-- 해당 가이드는 Python Tasks Vision API 기준으로 아래 개념을 사용한다.
-  - `BaseOptions`
-  - `PoseLandmarker`
-  - `PoseLandmarkerOptions`
-  - `VisionRunningMode`
-  - `PoseLandmarkerResult`
-- 백엔드 배치 처리 구조상 `detect_for_video(mp_image, frame_timestamp_ms)`가 가장 잘 맞는다.
-- 이미지 단건 처리나 실시간 스트림은 향후 확장 포인트로 분리하는 편이 적절하다.
+### 설정 및 자산
 
-## 3. 설계 원칙
+- 기본 비디오: `poseLandmarker_Python/src/video/backSquat.mp4`
+- 모델 디렉터리: `poseLandmarker_Python/models/mediapipe/`
+- 지원 모델:
+  - `pose_landmarker_lite.task`
+  - `pose_landmarker_full.task`
+  - `pose_landmarker_heavy.task`
+- 기본 모델 변형: `full`
+- 기본 delegate: `GPU`
+- 임시 저장 위치:
+  - 업로드: `poseLandmarker_Python/tmp/uploads`
+  - 추출 프레임: `poseLandmarker_Python/tmp/frames`
+  - 스켈레톤: `poseLandmarker_Python/tmp/skeletons`
+  - benchmark: `poseLandmarker_Python/tmp/benchmarks`
 
-- MediaPipe 의존 코드는 adapter 계층에 격리한다.
-- 프레임 순회와 추론 orchestration은 service 계층에 둔다.
-- 컨트롤러는 요청 접수와 job orchestration만 담당한다.
-- 추론 결과 원형과 백엔드 JSON 출력 형태를 분리한다.
-- 현재 목업 구현과 실제 MediaPipe 구현이 같은 서비스 인터페이스를 공유하도록 설계한다.
-- 장기적으로는 배치 처리, 스트리밍 처리, 단일 이미지 처리를 같은 공통 인터페이스 아래에서 분기할 수 있어야 한다.
-
-## 4. 제안 아키텍처
-
-### 4.1 계층 구조
+## 3. 계층 구조
 
 ```text
-controller
-  -> service.job_manager
-    -> request option validation
-    -> service.video_reader
-    -> service.pose_inference
-      -> adapter.mediapipe_adapter
-        -> MediaPipe PoseLandmarker
-    -> service.benchmarking
-      -> tmp/benchmarks/*.summary.json
-      -> tmp/benchmarks/*.frames.json
-
-service.pose_inference
-  -> service.skeleton_mapper
-    -> schema.result
+FastAPI app
+  -> controller.jobs
+    -> service.job_manager.create_job()
+      -> background task: JobManager._run_job()
+        -> service.video_reader.extract_frames()
+        -> service.pose_inference.run()
+          -> adapter.mediapipe_adapter.create_landmarker()
+          -> adapter.mediapipe_adapter.detect_for_video()
+        -> service.skeleton_mapper.map_landmarks()
+        -> service.analysis_pipeline.analyze()
+        -> service.benchmarking.build_result()
+        -> service.llm_feedback.generate()
+        -> tmp/skeletons/{job_id}.json
+        -> tmp/benchmarks/benchmark_{job_id}.summary.json
+        -> tmp/benchmarks/benchmark_{job_id}.frames.json
+  -> controller.results
+    -> job_manager.get_result()
+    -> job_manager.get_skeleton_page()
+    -> job_manager.get_benchmark()
+    -> job_manager.get_benchmark_frame_metrics()
 ```
 
-### 4.2 책임 분리
+## 4. 실행 흐름
 
-#### adapter/mediapipe_adapter.py
+### 4.1 요청 수신
 
-MediaPipe API 호출을 직접 담당한다.
+`POST /jobs`는 아래 입력을 받는다.
 
-- 모델 옵션 생성
-- `PoseLandmarker` 인스턴스 생성과 종료
-- `detect`, `detect_for_video`, `detect_async` 호출 래핑
-- MediaPipe 예외를 프로젝트 예외로 변환
+- `video`
+- `fps` 또는 `samplingFps`
+- `exerciseType`
+- `modelAssetPath`
+- `modelVariant`
+- `delegate`
 
-#### service/pose_inference.py
+비디오가 없으면 `MOCK_VIDEO_PATH`를 사용한다. 업로드가 있으면 `tmp/uploads`에 저장한 뒤 그 경로를 사용한다.
 
-포즈 추론 유스케이스를 담당한다.
+### 4.2 요청 검증
 
-- 입력 프레임 반복
-- `timestamp_ms`와 `running_mode`에 맞는 API 선택
-- 추론 결과 직렬화
-- 프레임 메타데이터와 추론 결과 병합
+`JobManager.create_job()`는 job 등록 전에 inference override를 검증한다.
 
-#### service/skeleton_mapper.py
+- `"string"` 또는 빈 문자열은 미입력으로 간주
+- `modelVariant`는 `lite`, `full`, `heavy`만 허용
+- `delegate`는 `CPU`, `GPU`만 허용
+- `samplingFps`는 `> 0` 이어야 함
 
-추론 결과를 분석 친화적 구조로 변환한다.
+검증 실패는 비동기 job 생성 전에 `HTTP 400`으로 즉시 반환된다.
 
-- `videoInfo` 조립
-- `frames` 배열 조립
-- `nextTimestampCursorMs` 계산
+### 4.3 백그라운드 실행
 
-#### service/analysis_pipeline.py
+`JobManager._run_job()`는 아래 순서로 동작한다.
 
-MVP 이후 단계에서 스켈레톤 결과를 실제 운동 분석 결과로 확장한다.
+1. 프레임 추출
+2. Pose 추론
+3. 스켈레톤 매핑 및 파일 저장
+4. 분석 생성
+5. benchmark 생성
+6. LLM feedback 생성
+7. job 완료 처리
 
-- timeseries 생성
-- KPI 계산
-- rep segment 조립
-- 이슈 생성
+CPU 바운드 단계는 `asyncio.to_thread()`로 worker thread에서 실행한다. 목적은 `GET /jobs/{job_id}` 같은 가벼운 polling 요청이 이벤트 루프 블로킹 영향을 덜 받게 하는 것이다.
 
-#### service/benchmarking.py
+### 4.4 외부 노출 상태
 
-개발 단계 benchmark 집계와 저장을 담당한다.
+현재 외부 상태 값은 아래처럼 보인다.
 
-- 프레임별 `rgb_conversion_ms`, `inference_ms`, `serialization_ms` 집계
-- run 단위 `frame_extraction_ms`, `analysis_ms`, `total_elapsed_ms` 결합
-- `requested_delegate`, `actual_delegate`, fallback 여부 기록
-- `pose_detected_ratio`, visibility 계열 품질 지표 계산
-- summary JSON과 frame-level JSON 저장
-- 웹 UI 비교 화면용 API 응답 shape 생성
+- `queued`
+- `extracting`
+- `analyzing`
+- `generating_feedback`
+- `completed`
+- `failed`
 
-#### service/job_manager.py
+주의할 점:
 
-job 생성 전 입력 옵션 검증과 전체 오케스트레이션을 담당한다.
+- 내부적으로는 `extracting` 단계 안에서 프레임 추출뿐 아니라 pose inference와 skeleton 저장까지 수행한다.
+- 별도 `inferring` 상태는 아직 외부로 노출하지 않는다.
 
-- `modelAssetPath`, `modelVariant`, `delegate` 정규화
-- Swagger 기본 placeholder인 `"string"` 입력 무시
-- 허용되지 않은 `modelVariant`, `delegate`에 대해 즉시 `HTTP 400` 반환
-- 검증 완료 후에만 비동기 job 생성
-- 실행 단계에서는 frame extraction, pose inference, skeleton mapping, analysis, benchmarking 순서 조정
+## 5. 책임 분리
 
-현재 MVP v1 범위 밖:
+### `adapter/mediapipe_adapter.py`
 
-- world landmark 직렬화
-- segmentation mask 직렬화
-- `IMAGE`, `LIVE_STREAM` 실사용 경로
-- partial failure 정책
+MediaPipe 의존성을 직접 캡슐화한다.
 
-## 5. 제안 도메인 모델
+- `mediapipe` import
+- `PoseLandmarkerOptions` 조립
+- delegate enum 해석
+- `PoseLandmarker.create_from_options()` 호출
+- `detect()`, `detect_for_video()`, `detect_async()` 래핑
+- delegate별 초기화 오류 메시지 수집
 
-### 5.1 추론 옵션
+실행 정책:
+
+- 요청 delegate가 `GPU`면 `GPU -> CPU` 순서로 초기화 시도
+- 요청 delegate가 `CPU`면 CPU만 시도
+- GPU 요청이었고 CPU fallback까지 모두 실패하면 `GpuDelegateUnavailableError`
+- 그 외 초기화 실패는 `LandmarkerInitializationError`
+
+### `service/pose_inference.py`
+
+프레임 순회와 결과 직렬화를 담당한다.
+
+- 입력: `list[ExtractedFrame]`
+- 기본 실행 모드: `VIDEO`
+- MediaPipe 호출: `detect_for_video(mp_image, timestamp_ms)`
+- 입력 이미지가 3채널인지 검사
+- BGR 프레임을 RGB로 뒤집어 `mp.Image` 생성
+- 첫 번째 pose만 사용해 33개 랜드마크를 이름 기반으로 직렬화
+- 프레임별 benchmark 생성
+
+현재 출력 범위:
+
+- 포함:
+  - `landmarks`
+  - `poseDetected`
+  - `frameIndex`
+  - `timestampMs`
+- 스키마에는 있으나 미사용:
+  - `world_landmarks`
+  - `segmentation_mask`
+
+### `service/skeleton_mapper.py`
+
+추론 결과를 프론트/후속 분석 친화적 스켈레톤 구조로 변환한다.
+
+- `frames`
+- `videoInfo`
+- `nextTimestampCursorMs`
+
+`videoInfo`에는 현재 아래 값이 기록된다.
+
+- `videoSrc`
+- `displayName`
+- `sourceFps`
+- `frameCount`
+- `width`
+- `height`
+- `backend`
+- `extractedCount`
+- `requestedSamplingFps`
+- `effectiveSamplingFps`
+- `runningMode`
+- `modelName`
+- `detectedFrameCount`
+
+### `service/analysis_pipeline.py`
+
+현재는 placeholder 성격의 기본 분석 계층이다.
+
+- `summary`
+- `kpis`
+- `timeseries`
+- `events`
+- `repSegments`
+- `issues`
+
+실제 운동 분석 모델이라기보다 스켈레톤 결과를 후속 소비 가능한 구조로 정리하는 초기 단계에 가깝다.
+
+### `service/benchmarking.py`
+
+benchmark summary/detail 생성과 파일 저장을 담당한다.
+
+- run metadata
+- timing summary
+- quality summary
+- comparison tags
+- frame-level metrics
+- summary/detail 파일 경로
+
+저장 파일:
+
+- `tmp/benchmarks/benchmark_{job_id}.summary.json`
+- `tmp/benchmarks/benchmark_{job_id}.frames.json`
+
+### `service/llm_feedback.py`
+
+현재는 실제 LLM 연동이 아니라 규칙 기반 placeholder 응답을 생성한다.
+
+- `version: "v1"`
+- `model: "rule-based-placeholder"`
+- `overallComment`
+- `highlights`
+- `corrections`
+- `coachCue`
+
+## 6. 도메인 모델
+
+### 6.1 추론 옵션
 
 ```python
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Literal
-
-RunningMode = Literal["IMAGE", "VIDEO", "LIVE_STREAM"]
-
 @dataclass(slots=True)
 class PoseInferenceOptions:
     model_asset_path: Path
     model_variant: Literal["lite", "full", "heavy"] = "full"
-    running_mode: RunningMode = "VIDEO"
+    running_mode: Literal["IMAGE", "VIDEO", "LIVE_STREAM"] = "VIDEO"
     delegate: Literal["GPU", "CPU"] = "GPU"
     num_poses: int = 1
     min_pose_detection_confidence: float = 0.5
@@ -181,72 +297,17 @@ class PoseInferenceOptions:
     result_callback: object | None = None
 ```
 
-초기 구현에서는 `running_mode="VIDEO"`를 기본값으로 두는 것이 자연스럽다.
+현재 job API에서 실제로 외부 입력으로 받는 옵션은 아래만 연결돼 있다.
 
-이유는 아래와 같다.
+- `modelAssetPath`
+- `modelVariant`
+- `delegate`
 
-- 현재 입력이 `video_reader` 결과 중심이다.
-- 각 프레임에 `timestamp_ms`가 이미 있다.
-- 후속 분석이 시간축 기반이다.
+나머지 confidence 계열 옵션과 `num_poses`는 코드 기본값을 사용한다.
 
-실행 디바이스 정책은 아래가 기본값으로 적절하다.
-
-- 1차 시도: `delegate="GPU"`
-- fallback: GPU 초기화 실패 시 `delegate="CPU"`로 자동 재시도
-
-즉, 운영 기본값은 CPU 우선이 아니라 GPU 우선이다.
-
-모델 변형 기본값은 `full`이 적절하다.
-
-이유는 아래와 같다.
-
-- `lite`는 가장 빠르지만 품질 여유가 작다.
-- `heavy`는 가장 정확하지만 CPU fallback 시 부담이 매우 커진다.
-- `full`은 GPU 기본, CPU fallback 정책과 가장 균형이 좋다.
-
-현재 MVP v1 출력 범위는 2D 스켈레톤만으로 제한하는 것이 적절하다.
-
-이유는 아래와 같다.
-
-- 지금 단계는 저수준 기능 검증 단계다.
-- 2D 출력만으로도 프레임 추출, 추론 연결, 웹 오버레이, 기본 분석 검증이 가능하다.
-- 3D world landmark와 다중 영상 융합은 별도 후속 단계로 분리하는 편이 설계가 깔끔하다.
-
-### 5.1.1 사용 가능한 모델 변형
-
-공식 Pose Landmarker 모델 번들은 아래 3가지다.
-
-| 모델 | 번들 크기 | detector 입력 | landmarker 입력 | 데이터 타입 | 성향 |
-|---|---:|---|---|---|---|
-| `lite` | 3 MB | 224 x 224 x 3 | 256 x 256 x 3 | float16 | 속도 최우선 |
-| `full` | 6 MB | 224 x 224 x 3 | 256 x 256 x 3 | float16 | 균형형 |
-| `heavy` | 26 MB | 224 x 224 x 3 | 256 x 256 x 3 | float16 | 정확도 최우선 |
-
-공식 모델 카드 기준 참고 성능은 아래와 같다.
-
-| 모델 | Pixel 3 CPU | Pixel 3 GPU |
-|---|---:|---:|
-| `lite` | 약 44 FPS | 약 49 FPS |
-| `full` | 약 18 FPS | 약 40 FPS |
-| `heavy` | 약 4 FPS | 약 19 FPS |
-
-이 수치는 모바일 기준 참고값이므로 서버 GPU나 데스크톱 환경에서는 절대값보다 상대 비교 지표로 보는 편이 맞다.
-
-### 5.2 프레임별 추론 결과
+### 6.2 프레임 결과
 
 ```python
-from dataclasses import dataclass
-
-@dataclass(slots=True)
-class PoseLandmarkPoint:
-    name: str
-    x: float
-    y: float
-    z: float
-    visibility: float | None
-    presence: float | None
-
-
 @dataclass(slots=True)
 class PoseFrameResult:
     frame_index: int
@@ -255,229 +316,105 @@ class PoseFrameResult:
     landmarks: list[PoseLandmarkPoint]
     world_landmarks: list[PoseLandmarkPoint] | None = None
     segmentation_mask: object | None = None
+    benchmark: PoseFrameBenchmark | None = None
 ```
 
-MVP v1 직렬화 규칙:
+직렬화 결과는 현재 아래 shape만 외부로 노출한다.
 
-- `landmarks`만 반환한다.
-- 이 `landmarks`는 2D 스켈레톤 출력으로 사용한다.
-- `world_landmarks`는 스키마 참고용 확장 필드로만 두고, MVP v1에서는 비활성화한다.
+```json
+{
+  "frameIndex": 12,
+  "timestampMs": 400.0,
+  "poseDetected": true,
+  "landmarks": [
+    {
+      "name": "left_shoulder",
+      "x": 0.42,
+      "y": 0.31,
+      "z": -0.12,
+      "visibility": 0.97,
+      "presence": 0.98
+    }
+  ]
+}
+```
 
-### 5.3 배치 추론 결과
+### 6.3 배치 추론 결과
 
 ```python
 @dataclass(slots=True)
 class PoseInferenceResult:
     source_path: str
-    running_mode: str
+    running_mode: RunningMode
     model_name: str
     frame_count: int
     detected_frame_count: int
-    requested_delegate: Literal["GPU", "CPU"]
-    actual_delegate: Literal["GPU", "CPU"]
+    requested_delegate: Delegate
+    actual_delegate: Delegate
     delegate_fallback_applied: bool
+    delegate_errors: dict[str, str]
     frames: list[PoseFrameResult]
 ```
 
-실제 구현에서는 긴 비디오 대응을 위해 `frames: list[...]` 대신 iterator 반환과 summary 반환을 분리하는 편이 낫다.
+현재 구현은 iterator 기반 스트리밍 결과가 아니라 메모리 내 리스트 결과를 반환한다.
 
-### 5.4 benchmark 결과
+### 6.4 스켈레톤 결과
 
-```python
-class BenchmarkResult:
-    run: {
-        benchmarkRunId: str
-        sourceVideoPath: str
-        videoFingerprint: str
-        requestedDelegate: str
-        actualDelegate: str
-        delegateFallbackApplied: bool
-        modelVariant: str
-        runningMode: str
-        frameCount: int
-        sampleIntervalMs: float
-        startedAt: str
-        completedAt: str
-    }
-    timingSummary: {
-        frameExtractionMs: float
-        rgbConversionMs: float
-        inferenceMs: float
-        serializationMs: float
-        analysisMs: float
-        totalElapsedMs: float
-        stageStats: list[object]
-    }
-    qualitySummary: {
-        poseDetectedRatio: float
-        detectedFrameCount: int
-        avgVisibility: float | None
-        minVisibility: float | None
-        lowVisibilityFrameRatio: float
-        consecutiveMissedPoseMax: int
-        analysisSuccess: bool
-    }
-    comparisonTags: list[str]
-    frameMetrics: list[object]
-    storage: {
-        summaryPath: str
-        frameMetricsPath: str
-    } | None
+```json
+{
+  "frames": [],
+  "videoInfo": {},
+  "nextTimestampCursorMs": 0
+}
 ```
 
-운영 응답에서는 summary와 frame-level 상세를 분리하는 것이 적절하다.
+`GET /jobs/{job_id}/skeleton`은 전체 결과 대신 page 응답을 제공한다.
+
+- `frames`
+- `videoInfo`
+- `nextTimestampCursorMs`
+- `offset`
+- `limit`
+- `totalFrames`
+
+### 6.5 최종 결과
+
+`GET /jobs/{job_id}/result`는 아래 최상위 구조를 반환한다.
+
+```json
+{
+  "skeleton": {},
+  "analysis": {},
+  "llmFeedback": {},
+  "benchmark": {}
+}
+```
+
+즉, MediaPipe 기능은 이제 독립된 포즈 추론 모듈을 넘어 최종 motion-analysis 응답 일부로 편입돼 있다.
+
+## 7. API 표면
+
+### Job 생성 및 상태
+
+- `POST /jobs`
+- `GET /jobs/{job_id}`
+
+### 결과 조회
 
 - `GET /jobs/{job_id}/result`
-  - `benchmark` summary 포함
+- `GET /jobs/{job_id}/skeleton`
+- `GET /jobs/{job_id}/skeleton/download`
 - `GET /jobs/{job_id}/benchmark`
-  - 비교 차트용 summary 전용 응답
 - `GET /jobs/{job_id}/benchmark/frames`
-  - frame-level 상세 응답
 
-## 6. 세부 처리 흐름
+조회 정책:
 
-### 6.1 초기화
+- 결과형 API는 job이 `completed`가 아니면 `HTTP 409`
+- 존재하지 않는 job이면 `HTTP 404`
 
-1. `POST /jobs` 요청에서 `modelAssetPath`, `modelVariant`, `delegate`를 먼저 정규화한다.
-2. 비어 있는 문자열과 Swagger placeholder `"string"`은 미입력으로 본다.
-3. `modelVariant`는 `lite`, `full`, `heavy`만 허용한다.
-4. `delegate`는 `GPU`, `CPU`만 허용한다.
-5. 허용되지 않은 값이면 job을 큐에 넣기 전에 즉시 `HTTP 400`을 반환한다.
-6. 요청 검증을 통과하면 `model_variant`에 맞는 `.task` 번들을 선택한다.
-   - 현재 기본 경로는 `poseLandmarker_Python/models/mediapipe/pose_landmarker_full.task`다.
-7. `delegate="GPU"`로 `MediaPipeAdapter.create_landmarker()`를 먼저 시도한다.
-8. GPU 초기화가 실패하면 `delegate="CPU"`로 한 번 더 시도한다.
-9. `running_mode`, confidence, `num_poses` 옵션을 적용한다.
-10. GPU, CPU 모두 실패하면 즉시 예외를 발생시킨다.
+## 8. 예외 및 실패 정책
 
-현재 검증 기준으로는 CPU delegate fallback으로 landmarker 초기화가 성공했다.
-
-### 6.2 프레임 입력 준비
-
-입력 프레임은 `ExtractedFrame` 기준으로 받는다.
-
-- `frame.image`
-- `frame.index`
-- `frame.timestamp_ms`
-- `frame.width`
-- `frame.height`
-
-MediaPipe 호출 직전 변환은 아래 순서를 권장한다.
-
-1. 이미지 존재 여부 확인
-2. 필요 시 BGR -> RGB 변환
-3. `mp.Image` 객체 생성
-4. `timestamp_ms`를 정수 또는 규격에 맞는 값으로 정리
-
-benchmark 관점에서는 이 구간의 시간을 프레임별 `rgb_conversion_ms`로 별도 계측한다.
-
-### 6.3 추론 실행
-
-기본 구현은 `VIDEO` 모드 기반으로 시작한다.
-
-- `PoseLandmarker.detect_for_video(mp_image, timestamp_ms)`
-- 프레임 순서 보장
-- 시간축 결과와 후속 분석 연결 용이
-
-추후 확장 지점:
-
-- 이미지 단건 처리면 `detect()`
-- 실시간 카메라나 웹소켓 입력이면 `detect_async()`
-
-### 6.4 결과 직렬화
-
-MediaPipe 원본 결과는 내부 구조가 후속 분석에 직접 쓰기에는 다소 무겁다.
-
-따라서 service 계층에서 아래 규칙으로 직렬화하는 것이 좋다.
-
-- 프레임 인덱스 유지
-- 원본 `timestamp_ms` 유지
-- 포즈가 없으면 `poseDetected=False`
-- 랜드마크는 이름 있는 리스트로 정리
-- 가시성, presence가 있으면 포함
-- world landmark는 선택 필드로 둔다
-
-현재 구현에서는 직렬화 직후 프레임별 `serialization_ms`, `avg_visibility`, `min_visibility`, `landmark_count`도 benchmark 상세에 함께 붙인다.
-
-현재 MVP v1에서는 `PoseLandmarkerResult`에서 2D 좌표만 직렬화 대상으로 본다.
-
-즉, 현재 구현 범위는 아래와 같다.
-
-- 반환: `landmarks`
-- 보류: `world_landmarks`
-- 보류: 다중 영상 3D 융합 결과
-
-### 6.5 후속 처리 연동
-
-`SkeletonMapperService.map_landmarks()`는 아래 역할을 담당한다.
-
-- 프레임 결과를 `skeleton.frames`로 정리
-- 추출 결과 메타데이터를 `skeleton.videoInfo`로 정리
-- 다음 커서 시간을 `nextTimestampCursorMs`로 계산
-- 현재 구현은 `videoInfo.runningMode`, `videoInfo.modelName`, `videoInfo.detectedFrameCount`도 함께 기록한다.
-
-`SkeletonMapperService.map_landmarks()`까지를 현재 MVP 완료 기준으로 본다.
-
-즉, 현재 산출물은 MediaPipe 추론 결과를 분석 친화적 공통 포맷인 `skeleton.frames`, `skeleton.videoInfo` 구조로 변환한 JSON이다.
-
-이후 `AnalysisPipelineService.analyze()`는 이 공통 포맷을 입력으로 받아 실제 운동 분석 결과를 생성하는 후속 단계로 둔다.
-
-현재 job orchestration에서는 분석 완료 후 `BenchmarkService`가 아래를 추가 생성한다.
-
-- run metadata
-- timing summary
-- quality summary
-- frame-level metrics
-- 저장 위치 메타데이터
-
-장기적으로는 2개 이상의 영상을 병렬 처리해 얻은 여러 3D 객체를 융합하는 별도 계층을 둘 수 있다.
-
-다만 이 계층은 MVP v1 범위 밖으로 둔다.
-
-## 7. 제안 모듈 인터페이스
-
-### adapter/mediapipe_adapter.py
-
-```python
-class MediaPipeAdapter:
-    def create_landmarker(self, options: PoseInferenceOptions): ...
-    def close_landmarker(self) -> None: ...
-    def detect(self, image): ...
-    def detect_for_video(self, image, timestamp_ms: int): ...
-    def detect_async(self, image, timestamp_ms: int) -> None: ...
-    def to_mp_image(self, rgb_image): ...
-    def active_delegate(self) -> str: ...
-```
-
-### service/pose_inference.py
-
-```python
-class PoseInferenceService:
-    def run(
-        self,
-        frames: list[ExtractedFrame],
-        options: PoseInferenceOptions | None = None,
-        source_path: str = "",
-    ) -> PoseInferenceResult: ...
-
-    def infer(
-        self,
-        frames: list[ExtractedFrame],
-        options: PoseInferenceOptions | None = None,
-    ) -> list[dict]: ...
-
-    def iter_infer(
-        self,
-        frames,
-        options: PoseInferenceOptions | None = None,
-    ): ...
-```
-
-`infer()`는 소규모 파일이나 테스트용, `iter_infer()`는 실제 긴 비디오 분석 파이프라인용으로 분리하는 구성이 적절하다.
-
-## 8. 예외 및 장애 처리 정책
-
-### 예외 유형
+코드상 주요 예외는 아래와 같다.
 
 - `ModelAssetNotFoundError`
 - `LandmarkerInitializationError`
@@ -486,144 +423,43 @@ class PoseInferenceService:
 - `PoseInferenceError`
 - `ResultSerializationError`
 
-### 처리 기준
+현재 실패 정책은 단순하다.
 
-- 요청 옵션 검증 실패:
-  - `service/job_manager.py`가 job 생성 전에 처리한다.
-  - `modelVariant`가 `lite`, `full`, `heavy`가 아니면 `HTTP 400`을 반환한다.
-  - `delegate`가 `CPU`, `GPU`가 아니면 `HTTP 400`을 반환한다.
-  - Swagger placeholder `"string"`은 값이 없는 것처럼 무시한다.
-- 모델 open 실패:
-  - GPU로 먼저 시도한다.
-  - GPU 실패 시 CPU fallback을 한 번 시도한다.
-  - 둘 다 실패하면 작업 실패 처리한다.
-- 일부 프레임 이미지 누락:
-  - 초기 버전은 작업 실패로 처리하는 편이 단순하다.
-- 특정 프레임 추론 실패:
-  - 추후 partial failure 정책으로 확장 가능
-  - 초기 버전은 첫 실패 시 작업 실패가 무난하다.
-- 결과 직렬화 실패:
-  - 스키마 불일치 가능성이 크므로 즉시 실패 처리
+- 잘못된 요청 옵션: job 생성 전 `HTTP 400`
+- 모델 파일 없음: job 실패
+- MediaPipe import/초기화 실패: job 실패
+- 프레임 이미지 누락 또는 포맷 오류: job 실패
+- 특정 프레임 추론 실패: job 전체 실패
+- 결과 직렬화 실패: job 전체 실패
 
-초기 버전에서는 단순성을 위해 "첫 추론 실패 시 작업 실패"가 적절하다.
+partial failure, frame skip, degraded-success 정책은 아직 구현돼 있지 않다.
 
-## 9. 성능 관점 권고
+## 9. 성능 및 운영 관점
 
-- 기본 흐름은 `video_reader`의 샘플링 결과를 그대로 사용한다.
-- 실행 기본값은 GPU 가속이며, CPU는 fallback 경로로 둔다.
-- 모델 기본값은 `full`로 두고, `lite/heavy`는 명시적 선택으로 분리하는 편이 낫다.
-- RGB 변환은 MediaPipe 호출 직전에만 수행한다.
-- 긴 영상은 결과 리스트 누적 대신 iterator 기반 확장을 고려한다.
-- 모델 변형이 여러 개라면 정확도 우선과 속도 우선 프로파일을 분리하는 편이 낫다.
-- segmentation mask는 실제 사용 전까지 기본 비활성화가 적절하다.
-- MVP v1에서는 2D 출력만 유지해 직렬화 비용과 소비자 복잡도를 줄이는 편이 낫다.
+- 기본 delegate는 `GPU`이며 실패 시 `CPU` fallback을 시도한다.
+- 기본 모델은 `full`이다.
+- `samplingFps`를 낮춰 추론 비용을 직접 줄일 수 있다.
+- RGB 변환, 추론, 직렬화 시간은 프레임별로 계측된다.
+- summary benchmark와 frame-level benchmark를 분리해 비교 UI와 상세 분석 UI를 분리할 수 있다.
+- 현재 `PoseInferenceService.run()`은 모든 프레임 결과를 메모리에 적재하므로 매우 긴 영상에 대한 스트리밍 최적화는 아직 후속 과제다.
 
-추가 참고 사항:
+## 10. 현재 범위와 미구현 범위
 
-- 아직 실측 전이므로, 모든 환경에서 같은 GPU 경로가 안정적이라고 가정하지 않는다.
-- 성능 병목은 프레임 추출, RGB 변환, MediaPipe 추론, 결과 직렬화가 함께 만든다.
-- 따라서 MediaPipe만 단독 최적화하기보다 `video_reader`와 묶은 end-to-end 기준으로 봐야 한다.
-- 따라서 개발 단계에서는 `frame_extraction_ms`, `rgb_conversion_ms`, `inference_ms`, `serialization_ms`, `analysis_ms`, `total_elapsed_ms`를 함께 저장하는 benchmark 기본값이 필요하다.
-- `num_poses`를 크게 두면 비용이 늘어나므로 운동 분석 기본값은 1이 자연스럽다.
-- world landmark, segmentation mask 같은 확장 출력은 필요할 때만 켜는 편이 낫다.
-- 따라서 운영에서는 "GPU 우선, CPU fallback"을 기본 정책으로 두고 실제 fallback 발생률을 추적하는 편이 낫다.
-- 특히 `heavy`는 CPU fallback 시 처리량 저하 폭이 커서 기본값으로 두기보다는 품질 우선 프로파일로 분리하는 편이 안전하다.
-- benchmark summary에는 평균뿐 아니라 median, p95, 단계별 점유율을 함께 둬야 병목 비교가 쉬워진다.
-- 품질 비교를 위해 `pose_detected_ratio`, `avg_visibility`, `min_visibility`, `low_visibility_frame_ratio`, `consecutive_missed_pose_max`를 최소 공통 지표로 둔다.
-- 웹 UI는 summary 위주로 보고, frame-level 상세는 별도 API로 지연 조회하는 편이 응답 크기와 비교 UX 모두에 유리하다.
+현재 구현 범위:
 
-추후 선택 개선을 위한 후보 항목:
+- 업로드 비디오 또는 목업 비디오 분석
+- MediaPipe VIDEO 모드 기반 추론
+- 33개 랜드마크 직렬화
+- 스켈레톤 JSON 저장
+- 기본 분석 결과 생성
+- placeholder LLM feedback 생성
+- benchmark summary/detail 저장 및 조회
 
-- `model_variant`
-  - lite, full, heavy 중 어떤 모델을 사용할지 지정하기 위한 핵심 옵션
-- `delegate`
-  - 기본값은 GPU로 두고, CPU fallback 여부와 장치별 성능 차이를 관리하기 위한 옵션 후보
-- `output_segmentation_masks`
-  - 포즈 외 보조 출력이 실제 제품 가치가 있는지 검증하기 위한 옵션 후보
-- `batch_profile`
-  - `accuracy`, `balanced`, `speed` 같은 프리셋으로 운영 복잡도를 낮출지 검토하기 위한 후보
+현재 미구현 또는 비활성 범위:
 
-위 항목들은 "지금 바로 구현한다"는 의미가 아니라, 실제 MediaPipe 연결 이후 성능 검증에서 비교 대상으로 포함할 수 있는 참고안으로 남긴다.
-
-## 10. 구현 순서 제안
-
-### Phase 1
-
-- MediaPipe Tasks Vision 의존성 확정
-- `adapter/mediapipe_adapter.py` 실제 구현
-- `service/pose_inference.py`에 실제 landmarker 호출 연결
-- 2D 스켈레톤 결과 직렬화 기본 구조 정리
-
-### Phase 2
-
-- `VIDEO` 모드 기준 end-to-end 연결
-- `skeleton_mapper.py`와 실제 결과 구조 정합성 보정
-- 공통 skeleton JSON 응답 또는 파일 출력 연결
-- 프레임 수, timestamp, landmark 수에 대한 기본 sanity check 추가
-- 오류 코드와 예외 메시지 정리
-- 샘플 비디오 회귀 테스트 추가
-- benchmark summary 및 frame-level 저장 구조 연결
-- `/jobs/{job_id}/benchmark`, `/jobs/{job_id}/benchmark/frames` 응답 연결
-- delegate fallback, model variant, 샘플링 조건별 비교 기준 정리
-
-### Phase 3
-
-- 실제 운동 분석 로직 도입
-- timeseries, KPI, rep segment, issue 생성
-- `llm_feedback` 연동 재개
-- `IMAGE`, `LIVE_STREAM` 확장
-- iterator 기반 대용량 처리
-- partial failure 정책
-- 모델 변형별 성능 비교
-- segmentation mask / world landmark 확장 검토
-- 다중 영상 병렬 처리와 3D 융합 검토
-
-## 11. 테스트 전략
-
-### 단위 테스트
-
-- 존재하지 않는 모델 파일 입력
-- 빈 프레임 또는 `image=None` 처리
-- `running_mode`별 분기 검증
-- 포즈 미검출 프레임 직렬화 검증
-- 랜드마크 좌표 스키마 검증
-
-### 통합 테스트
-
-- 샘플 비디오 1개에 대해 프레임 추출 후 포즈 추론
-- skeleton mapping까지 이어지는 흐름 검증
-- 공통 skeleton JSON이 응답 또는 파일로 출력되는지 검증
-- frame 수, timestamp, poseDetected 정합성이 유지되는지 확인
-- benchmark summary JSON과 frame metrics JSON이 함께 저장되는지 확인
-- `requestedDelegate != actualDelegate`일 때 fallback 표시가 맞는지 확인
-- `/jobs/{job_id}/result`와 `/jobs/{job_id}/benchmark`의 summary 의미가 일치하는지 확인
-
-현재 수동 검증 결과:
-
-- `POST /jobs` 생성 성공
-- status polling 후 `completed` 도달 확인
-- 기본 목업 비디오 기준 `frames=54`, `detectedFrameCount=54`
-- `videoInfo.modelName=pose_landmarker_full.task`
-- `videoInfo.runningMode=VIDEO`
-
-### 수동 검증 포인트
-
-- 실제 감지 프레임 수
-- 프레임별 `timestampMs` 정합성
-- 랜드마크 좌표 범위 일관성
-- 포즈 미검출 프레임 처리 방식
-- 긴 비디오에서 메모리 사용량 증가 여부
-- 샘플링 밀도에 따른 end-to-end 처리 시간 차이
-
-## 12. 권장 초안 결론
-
-이번 기능은 MediaPipe 자체를 수정하는 작업이 아니라, MediaPipe Tasks Vision Pose Landmarker를 현재 Python 백엔드 구조에 맞게 adapter/service 분리로 수용하는 작업으로 정의하는 것이 맞다.
-
-권장 시작점은 다음 두 파일이다.
-
-- `adapter/mediapipe_adapter.py`: MediaPipe 세부사항 캡슐화
-- `service/pose_inference.py`: 프레임 순회, 추론 호출, 결과 직렬화 담당
-
-이후 `service/skeleton_mapper.py`가 MediaPipe 결과를 분석 친화적 공통 포맷으로 정리하고, 그 다음 단계에서 `service/analysis_pipeline.py`가 실제 운동 분석으로 확장하는 형태로 연결하면 된다.
-
-현재 기준으로 위 시작점 구현은 완료됐고, 다음 관심사는 분석 로직 고도화와 옵션 노출 범위 정리다.
+- 단일 이미지 전용 API
+- LIVE_STREAM 기반 실시간 추론 API
+- world landmarks 외부 노출
+- segmentation mask 외부 노출
+- frame-level partial failure 복구
+- 실제 LLM 기반 피드백 생성

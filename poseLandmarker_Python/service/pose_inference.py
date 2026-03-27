@@ -87,6 +87,7 @@ class PoseInferenceService:
             requested_delegate=resolved_options.delegate,
             actual_delegate=actual_delegate,  # type: ignore[arg-type]
             delegate_fallback_applied=resolved_options.delegate != actual_delegate,
+            delegate_errors=self._adapter.delegate_errors(),
             frames=frame_results,
         )
 

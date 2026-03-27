@@ -9,6 +9,7 @@ from .config import (
     MODEL_DIR,
     MOCK_VIDEO_PATH,
     PORT,
+    SKELETON_DIR,
     TEMP_DIR,
     UPLOAD_DIR,
 )
@@ -20,6 +21,7 @@ __all__ = [
     "UPLOAD_DIR",
     "EXTRACTED_FRAME_DIR",
     "BENCHMARK_DIR",
+    "SKELETON_DIR",
     "MODEL_DIR",
     "MODEL_ASSET_PATHS",
     "DEFAULT_MODEL_VARIANT",

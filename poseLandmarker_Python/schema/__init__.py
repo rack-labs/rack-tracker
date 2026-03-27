@@ -1,5 +1,5 @@
 from .job import JobCreateResponse, JobProgress, JobStatusResponse
-from .result import MotionAnalysisResult
+from .result import MotionAnalysisResult, MotionAnalysisSummary, SkeletonPageResponse
 from .benchmark import BenchmarkResult
 
 __all__ = [
@@ -8,4 +8,6 @@ __all__ = [
     "JobProgress",
     "JobStatusResponse",
     "MotionAnalysisResult",
+    "MotionAnalysisSummary",
+    "SkeletonPageResponse",
 ]

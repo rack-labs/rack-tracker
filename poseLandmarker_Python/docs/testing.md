@@ -120,14 +120,26 @@ job 상태가 `completed`가 되면 최종 결과를 조회할 수 있습니다.
 
 여기서 확인할 수 있는 대표 항목은 아래와 같습니다.
 
-- `skeleton`
+- `skeleton.videoInfo`
+- `skeleton.nextTimestampCursorMs`
 - `analysis`
 - `llmFeedback`
 - `benchmark`
 
 아직 완료 전인데 이 API를 호출하면 `409` 응답이 날 수 있습니다.
 
-### 3-4. benchmark 확인
+### 3-4. `GET /jobs/{job_id}/skeleton`로 frame 페이지 확인
+
+대용량 skeleton frame은 페이지 단위로 확인합니다.
+
+- `offset`: 시작 프레임 인덱스
+- `limit`: 한 번에 가져올 프레임 수, 기본값 `30`
+
+### 3-5. `GET /jobs/{job_id}/skeleton/download`로 전체 skeleton 다운로드
+
+Swagger UI에서는 이 엔드포인트를 파일 다운로드 용도로 사용합니다.
+
+### 3-6. benchmark 확인
 
 추가로 아래 API도 확인할 수 있습니다.
 
@@ -172,7 +184,19 @@ Invoke-RestMethod "http://127.0.0.1:8000/jobs/$($job.jobId)"
 Invoke-RestMethod "http://127.0.0.1:8000/jobs/$($job.jobId)/result"
 ```
 
-### 4-5. benchmark 조회
+### 4-5. skeleton 페이지 조회
+
+```powershell
+Invoke-RestMethod "http://127.0.0.1:8000/jobs/$($job.jobId)/skeleton?offset=0&limit=30"
+```
+
+### 4-6. skeleton 파일 다운로드
+
+```powershell
+Invoke-WebRequest "http://127.0.0.1:8000/jobs/$($job.jobId)/skeleton/download" -OutFile "$($job.jobId).skeleton.json"
+```
+
+### 4-7. benchmark 조회
 
 ```powershell
 Invoke-RestMethod "http://127.0.0.1:8000/jobs/$($job.jobId)/benchmark"
@@ -232,6 +256,8 @@ Swagger UI에서 `video`에 mp4 등의 파일을 넣어 호출하면 됩니다.
 아직 job이 끝나지 않았을 수 있습니다.
 먼저 `GET /jobs/{job_id}`로 상태가 `completed`인지 확인한 뒤
 `GET /jobs/{job_id}/result`를 호출해야 합니다.
+전체 skeleton이 필요하면 그 다음에 `GET /jobs/{job_id}/skeleton` 또는
+`GET /jobs/{job_id}/skeleton/download`를 호출합니다.
 
 ## 8. 가장 추천하는 테스트 순서
 
@@ -244,6 +270,7 @@ Swagger UI에서 `video`에 mp4 등의 파일을 넣어 호출하면 됩니다.
 5. `POST /jobs`에서 `fps=10`으로 호출
 6. `GET /jobs/{job_id}`로 완료 여부 확인
 7. `GET /jobs/{job_id}/result` 확인
-8. 필요하면 `benchmark` API 확인
+8. 필요하면 `GET /jobs/{job_id}/skeleton?offset=0&limit=30` 확인
+9. 필요하면 `benchmark` API 확인
 
 이 순서대로 되면 현재 구축된 백엔드의 기본 동작은 정상이라고 보면 됩니다.

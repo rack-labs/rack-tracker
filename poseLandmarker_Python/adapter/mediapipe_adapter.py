@@ -18,6 +18,7 @@ class MediaPipeAdapter:
         self._base_options_cls: Any | None = None
         self._landmarker: Any | None = None
         self._active_delegate = "CPU"
+        self._delegate_errors: dict[str, str] = {}
 
     def create_landmarker(self, options: PoseInferenceOptions) -> Any:
         model_path = Path(options.model_asset_path)
@@ -26,6 +27,7 @@ class MediaPipeAdapter:
 
         self.close_landmarker()
         self._ensure_mediapipe()
+        self._delegate_errors = {}
 
         delegates = [options.delegate]
         if options.delegate == "GPU":
@@ -40,6 +42,7 @@ class MediaPipeAdapter:
                 return self._landmarker
             except Exception as exc:
                 last_error = exc
+                self._delegate_errors[delegate_name] = self._format_delegate_error(exc)
                 self.close_landmarker()
                 if delegate_name == "GPU" and len(delegates) > 1:
                     continue
@@ -76,6 +79,9 @@ class MediaPipeAdapter:
 
     def active_delegate(self) -> str:
         return self._active_delegate
+
+    def delegate_errors(self) -> dict[str, str]:
+        return dict(self._delegate_errors)
 
     def _require_landmarker(self) -> None:
         if self._landmarker is None:
@@ -122,3 +128,9 @@ class MediaPipeAdapter:
         if delegate_enum is None:
             return None
         return getattr(delegate_enum, delegate_name)
+
+    def _format_delegate_error(self, exc: Exception) -> str:
+        message = " ".join(str(exc).split())
+        if not message:
+            message = exc.__class__.__name__
+        return f"{exc.__class__.__name__}: {message}"
