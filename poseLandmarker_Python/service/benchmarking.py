@@ -27,6 +27,7 @@ class BenchmarkService:
         *,
         benchmark_run_id: str,
         source_video_path: str,
+        job_metadata: dict[str, Any],
         extraction_options: FrameExtractionOptions,
         extraction_result: FrameExtractionResult,
         inference_result: PoseInferenceResult,
@@ -60,7 +61,11 @@ class BenchmarkService:
             analysis_result=analysis_result,
         )
 
-        sample_interval_ms = self._resolve_sample_interval_ms(extraction_options)
+        effective_sampling_fps = self._resolve_effective_sampling_fps(
+            extraction_options=extraction_options,
+            extraction_result=extraction_result,
+        )
+        sample_interval_ms = self._resolve_sample_interval_ms(effective_sampling_fps)
         result = BenchmarkResult(
             run=BenchmarkRunMetadata(
                 benchmarkRunId=benchmark_run_id,
@@ -70,6 +75,9 @@ class BenchmarkService:
                     extraction_result.frame_count,
                     extraction_result.source_fps,
                 ),
+                sourceVideoFps=round(extraction_result.source_fps, 3),
+                requestedSamplingFps=job_metadata.get("requestedSamplingFps"),
+                effectiveSamplingFps=round(effective_sampling_fps, 3),
                 requestedDelegate=inference_result.requested_delegate,
                 actualDelegate=inference_result.actual_delegate,
                 delegateFallbackApplied=inference_result.delegate_fallback_applied,
@@ -268,12 +276,16 @@ class BenchmarkService:
             shareRatio=round(rounded_total / max(total_elapsed_ms, 0.001), 4),
         )
 
-    def _resolve_sample_interval_ms(self, extraction_options: FrameExtractionOptions) -> float:
-        if extraction_options.target_fps:
-            return round(1000.0 / max(extraction_options.target_fps, 0.001), 3)
-        if extraction_options.every_n_frames:
-            return float(extraction_options.every_n_frames)
-        return 0.0
+    def _resolve_effective_sampling_fps(
+        self,
+        *,
+        extraction_options: FrameExtractionOptions,
+        extraction_result: FrameExtractionResult,
+    ) -> float:
+        return float(extraction_options.target_fps or extraction_result.source_fps)
+
+    def _resolve_sample_interval_ms(self, effective_sampling_fps: float) -> float:
+        return round(1000.0 / max(effective_sampling_fps, 0.001), 3)
 
     def _fingerprint(
         self,

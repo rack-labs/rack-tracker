@@ -10,6 +10,8 @@ class SkeletonMapperService:
         extraction_result: FrameExtractionResult,
         inference_result: PoseInferenceResult,
         display_name: str | None = None,
+        requested_sampling_fps: float | None = None,
+        effective_sampling_fps: float | None = None,
     ) -> dict:
         frame_results = [frame.to_dict() for frame in inference_result.frames]
         return {
@@ -31,6 +33,8 @@ class SkeletonMapperService:
                 "height": extraction_result.height,
                 "backend": extraction_result.backend,
                 "extractedCount": extraction_result.extracted_count,
+                "requestedSamplingFps": requested_sampling_fps,
+                "effectiveSamplingFps": effective_sampling_fps or extraction_result.source_fps,
                 "runningMode": inference_result.running_mode,
                 "modelName": inference_result.model_name,
                 "detectedFrameCount": inference_result.detected_frame_count,
