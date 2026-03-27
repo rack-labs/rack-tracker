@@ -17,6 +17,9 @@ class BenchmarkRunMetadata(BaseModel):
     benchmarkRunId: str
     sourceVideoPath: str
     videoFingerprint: str
+    sourceVideoFps: float
+    requestedSamplingFps: float | None = None
+    effectiveSamplingFps: float
     requestedDelegate: str
     actualDelegate: str
     delegateFallbackApplied: bool

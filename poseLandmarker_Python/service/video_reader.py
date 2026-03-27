@@ -42,6 +42,8 @@ class VideoReaderService:
         self._last_metadata = metadata
         source_fps = self._normalize_source_fps(float(metadata["fps"]))
         backend = str(metadata["backend"])
+        if options.sampling_mode == "target_fps":
+            options.target_fps = self._resolve_target_fps(options.target_fps, source_fps)
 
         next_target_ms = float(options.start_ms or 0.0)
         frame_index = 0
@@ -134,7 +136,7 @@ class VideoReaderService:
             if options.every_n_frames is None or options.every_n_frames < 1:
                 raise InvalidSamplingOptionError("every_n_frames must be >= 1.")
         if options.sampling_mode == "target_fps":
-            if options.target_fps is None or options.target_fps <= 0:
+            if options.target_fps is not None and options.target_fps <= 0:
                 raise InvalidSamplingOptionError("target_fps must be > 0.")
         if options.start_ms is not None and options.start_ms < 0:
             raise InvalidSamplingOptionError("start_ms must be >= 0.")
@@ -184,6 +186,11 @@ class VideoReaderService:
 
     def _normalize_source_fps(self, source_fps: float) -> float:
         return source_fps if source_fps > 0 else 30.0
+
+    def _resolve_target_fps(self, requested_target_fps: float | None, source_fps: float) -> float:
+        if requested_target_fps is None:
+            return source_fps
+        return min(float(requested_target_fps), source_fps)
 
     def _get_adapter(self) -> OpenCvAdapter:
         if self._adapter is None:

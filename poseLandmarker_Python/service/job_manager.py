@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -10,11 +11,17 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 
-from config import DEFAULT_MODEL_ASSET_PATH, DEFAULT_MODEL_VARIANT, EXTRACTED_FRAME_DIR, MODEL_ASSET_PATHS
+from config import (
+    DEFAULT_MODEL_ASSET_PATH,
+    DEFAULT_MODEL_VARIANT,
+    EXTRACTED_FRAME_DIR,
+    MODEL_ASSET_PATHS,
+    SKELETON_DIR,
+)
 from schema.frame import FrameExtractionOptions
 from schema.job import JobCreateResponse, JobProgress, JobStatusResponse
 from schema.pose import PoseInferenceOptions
-from schema.result import MotionAnalysisResult
+from schema.result import MotionAnalysisResult, MotionAnalysisSummary, SkeletonPageResponse
 from service.analysis_pipeline import AnalysisPipelineService
 from service.benchmarking import BenchmarkService
 from service.llm_feedback import LlmFeedbackService
@@ -36,6 +43,7 @@ class JobRecord:
     benchmark: dict[str, Any] | None = None
     benchmark_frame_metrics: list[dict[str, Any]] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
+    skeleton_path: str | None = None
 
 
 class JobManager:
@@ -52,17 +60,18 @@ class JobManager:
         self,
         filename: str,
         source_path: str,
-        fps: float,
+        requested_sampling_fps: float | None,
         exercise_type: str | None,
         model_asset_path: str | None = None,
         model_variant: str | None = None,
         delegate: str | None = None,
     ) -> JobCreateResponse:
         job_id = f"job_{uuid4().hex[:8]}"
+        resolved_requested_sampling_fps = self._normalize_requested_sampling_fps(requested_sampling_fps)
         metadata = {
             "filename": filename,
             "sourcePath": source_path,
-            "fps": fps,
+            "requestedSamplingFps": resolved_requested_sampling_fps,
             "exerciseType": exercise_type,
             "modelAssetPath": model_asset_path,
             "modelVariant": model_variant,
@@ -82,7 +91,7 @@ class JobManager:
                 "videoInfo": {
                     "videoSrc": source_path,
                     "displayName": filename,
-                    "fps": fps,
+                    "requestedSamplingFps": resolved_requested_sampling_fps,
                 },
                 "nextTimestampCursorMs": 0,
             },
@@ -120,13 +129,55 @@ class JobManager:
             error=job.error,
         )
 
-    def get_result(self, job_id: str) -> MotionAnalysisResult:
+    def get_result(self, job_id: str) -> MotionAnalysisSummary:
         job = self._jobs.get(job_id)
         if job is None:
             raise HTTPException(status_code=404, detail="Job not found.")
         if job.status != "completed" or job.result is None:
             raise HTTPException(status_code=409, detail="Job result is not ready.")
-        return job.result
+        skeleton = job.result.skeleton
+        return MotionAnalysisSummary(
+            skeleton={
+                "videoInfo": skeleton.get("videoInfo", {}),
+                "nextTimestampCursorMs": skeleton.get("nextTimestampCursorMs", 0),
+            },
+            analysis=job.result.analysis,
+            llmFeedback=job.result.llmFeedback,
+            benchmark=job.result.benchmark,
+        )
+
+    def get_skeleton_page(self, job_id: str, offset: int, limit: int) -> SkeletonPageResponse:
+        job = self._jobs.get(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="Job not found.")
+        if job.status != "completed" or job.result is None:
+            raise HTTPException(status_code=409, detail="Skeleton result is not ready.")
+
+        skeleton = job.result.skeleton
+        frames = skeleton.get("frames", [])
+        total_frames = len(frames)
+        bounded_offset = min(offset, total_frames)
+        bounded_limit = min(limit, max(total_frames - bounded_offset, 0))
+        page_frames = frames[bounded_offset : bounded_offset + bounded_limit]
+        next_cursor = (
+            page_frames[-1].get("timestampMs", 0) + 1 if page_frames else skeleton.get("nextTimestampCursorMs", 0)
+        )
+        return SkeletonPageResponse(
+            frames=page_frames,
+            videoInfo=skeleton.get("videoInfo", {}),
+            nextTimestampCursorMs=next_cursor,
+            offset=bounded_offset,
+            limit=bounded_limit,
+            totalFrames=total_frames,
+        )
+
+    def get_skeleton_download_path(self, job_id: str) -> str:
+        job = self._jobs.get(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="Job not found.")
+        if job.status != "completed" or not job.skeleton_path:
+            raise HTTPException(status_code=409, detail="Skeleton download is not ready.")
+        return job.skeleton_path
 
     def get_benchmark(self, job_id: str) -> dict[str, Any]:
         job = self._jobs.get(job_id)
@@ -155,16 +206,21 @@ class JobManager:
             frame_extraction_ms = (perf_counter() - extraction_started) * 1000.0
 
             inference_options = self._build_inference_options(job)
-            inference_result = self._pose_inference.run(
-                frames=extraction_result.frames,
-                options=inference_options,
-                source_path=str(extraction_result.source_path),
+            inference_result = await asyncio.to_thread(
+                self._pose_inference.run,
+                extraction_result.frames,
+                inference_options,
+                str(extraction_result.source_path),
             )
-            skeleton = self._skeleton_mapper.map_landmarks(
+            skeleton = await asyncio.to_thread(
+                self._skeleton_mapper.map_landmarks,
                 extraction_result,
                 inference_result,
-                display_name=str(job.metadata.get("filename") or extraction_result.source_path.name),
+                str(job.metadata.get("filename") or extraction_result.source_path.name),
+                job.metadata.get("requestedSamplingFps"),
+                job.metadata.get("effectiveSamplingFps"),
             )
+            job.skeleton_path = await asyncio.to_thread(self._persist_skeleton, job.job_id, skeleton)
             job.result = MotionAnalysisResult(
                 skeleton=skeleton,
                 analysis={},
@@ -174,16 +230,19 @@ class JobManager:
 
             self._set_progress(job, "analyzing", 2, 4, 0.75)
             analysis_started = perf_counter()
-            analysis = self._analysis_pipeline.analyze(
-                skeleton=skeleton,
-                exercise_type=job.metadata.get("exerciseType"),
+            analysis = await asyncio.to_thread(
+                self._analysis_pipeline.analyze,
+                skeleton,
+                job.metadata.get("exerciseType"),
             )
             analysis_ms = (perf_counter() - analysis_started) * 1000.0
             job.result.analysis = analysis
 
-            benchmark_result = self._benchmark_service.build_result(
+            benchmark_result = await asyncio.to_thread(
+                self._benchmark_service.build_result,
                 benchmark_run_id=f"benchmark_{job.job_id}",
                 source_video_path=str(extraction_result.source_path),
+                job_metadata=job.metadata,
                 extraction_options=extraction_options,
                 extraction_result=extraction_result,
                 inference_result=inference_result,
@@ -201,7 +260,7 @@ class JobManager:
             job.result.benchmark = job.benchmark
 
             self._set_progress(job, "generating_feedback", 3, 4, 0.9)
-            job.result.llmFeedback = self._llm_feedback.generate(analysis)
+            job.result.llmFeedback = await asyncio.to_thread(self._llm_feedback.generate, analysis)
 
             self._set_progress(job, "completed", 4, 4, 1.0)
             job.status = "completed"
@@ -210,16 +269,35 @@ class JobManager:
 
     def _extract_frames(self, job: JobRecord):
         source_path = Path(str(job.metadata["sourcePath"]))
-        fps = float(job.metadata["fps"])
+        requested_sampling_fps = job.metadata.get("requestedSamplingFps")
         options = FrameExtractionOptions(
             video_path=source_path,
             sampling_mode="target_fps",
-            target_fps=fps,
+            target_fps=float(requested_sampling_fps) if requested_sampling_fps is not None else None,
             output_dir=EXTRACTED_FRAME_DIR / job.job_id,
             save_images=False,
             convert_bgr_to_rgb=False,
         )
-        return options, self._video_reader.extract_frames(options)
+        result = self._video_reader.extract_frames(options)
+        job.metadata["sourceFps"] = result.source_fps
+        job.metadata["effectiveSamplingFps"] = float(options.target_fps or result.source_fps)
+        return options, result
+
+    def _normalize_requested_sampling_fps(self, value: float | None) -> float | None:
+        if value is None:
+            return None
+        resolved = float(value)
+        if resolved <= 0:
+            raise HTTPException(status_code=400, detail="samplingFps must be > 0.")
+        return resolved
+
+    def _persist_skeleton(self, job_id: str, skeleton: dict[str, Any]) -> str:
+        skeleton_path = SKELETON_DIR / f"{job_id}.json"
+        skeleton_path.write_text(
+            json.dumps(skeleton, ensure_ascii=False, separators=(",", ":")),
+            encoding="utf-8",
+        )
+        return str(skeleton_path)
 
     def _build_inference_options(self, job: JobRecord) -> PoseInferenceOptions | None:
         return self._build_inference_options_from_metadata(job.metadata)

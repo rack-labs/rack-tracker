@@ -15,7 +15,8 @@ router = APIRouter(prefix="/jobs", tags=["jobs"])
 @router.post("", response_model=JobCreateResponse)
 async def create_job(
     video: UploadFile | None = File(default=None),
-    fps: float = Form(...),
+    fps: float | None = Form(default=None),
+    samplingFps: float | None = Form(default=None),
     exerciseType: str | None = Form(default=None),
     modelAssetPath: str | None = Form(default=None),
     modelVariant: str | None = Form(default=None),
@@ -31,7 +32,7 @@ async def create_job(
     return await job_manager.create_job(
         filename=source_name,
         source_path=source_path,
-        fps=fps,
+        requested_sampling_fps=samplingFps if samplingFps is not None else fps,
         exercise_type=exerciseType,
         model_asset_path=modelAssetPath,
         model_variant=modelVariant,
