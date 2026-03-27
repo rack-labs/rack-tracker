@@ -17,6 +17,9 @@
 
 이 프로젝트는 `uv`로 Python 패키지를 관리하고 앱을 실행합니다.
 
+MediaPipe 포즈 추론용 기본 모델 파일 `models/mediapipe/pose_landmarker_full.task`는 현재 저장소에 포함되어 있습니다.
+즉, 기본 설정 기준으로는 별도 모델 다운로드 없이 바로 실행할 수 있습니다.
+
 `uv`를 사용한다면 보통 Python 가상환경을 직접 켤 필요는 없습니다.
 `uv sync`, `uv run ...` 같은 명령을 실행할 때 `uv`가 필요한 환경을 알아서 맞춰줍니다.
 
@@ -164,6 +167,8 @@ Motion Analysis Backend is running.
 - `POST /jobs` : 새 작업을 생성하는 API
 - `GET /jobs/{job_id}` : 작업 진행 상태를 확인하는 API
 - `GET /jobs/{job_id}/result` : 작업 결과를 가져오는 API
+- `GET /jobs/{job_id}/benchmark` : benchmark summary를 가져오는 API
+- `GET /jobs/{job_id}/benchmark/frames` : frame-level benchmark 상세를 가져오는 API
 
 ## 현재 목업 비디오 동작
 
@@ -172,6 +177,24 @@ Motion Analysis Backend is running.
 - `src/video/backSquat.mp4`
 
 즉, 현재 단계에서는 파일을 첨부하지 않아도 job 생성이 가능하고, 결과의 `skeleton.videoInfo.videoSrc`는 위 목업 비디오 경로를 가리킵니다.
+
+## benchmark 결과는 어디에서 보나요?
+
+이제 작업이 완료되면 결과에 `benchmark` 블록이 함께 포함됩니다.
+
+- `/jobs/{job_id}/result`
+  - 스켈레톤, 분석, LLM 피드백과 함께 benchmark summary를 포함합니다.
+- `/jobs/{job_id}/benchmark`
+  - 비교 차트나 요약 카드에 쓰기 좋은 summary 중심 응답을 반환합니다.
+- `/jobs/{job_id}/benchmark/frames`
+  - 프레임별 `rgbConversionMs`, `inferenceMs`, `serializationMs`, `poseDetected`, visibility 지표를 반환합니다.
+
+현재 benchmark는 아래 정보를 기록합니다.
+
+- 단계별 시간: `frameExtractionMs`, `rgbConversionMs`, `inferenceMs`, `serializationMs`, `analysisMs`, `totalElapsedMs`
+- 실행 메타데이터: `requestedDelegate`, `actualDelegate`, `delegateFallbackApplied`, `modelVariant`, `frameCount`, `sampleIntervalMs`
+- 품질 지표: `poseDetectedRatio`, `detectedFrameCount`, `avgVisibility`, `minVisibility`, `lowVisibilityFrameRatio`, `consecutiveMissedPoseMax`
+- 저장 위치: `tmp/benchmarks/*.summary.json`, `tmp/benchmarks/*.frames.json`
 
 ## 팀 협업용 안내
 
@@ -405,3 +428,7 @@ OpenCV, MediaPipe 같은 외부 라이브러리를 프로젝트 코드와 연결
 - 새로운 분석 항목을 추가할 때는 먼저 `analysis` 결과에 어떤 필드를 넣을지부터 정한 뒤 구현하기
 
 즉, 코드를 먼저 막 추가하기보다 "결과 형식부터 합의하고, 그다음 분석 로직을 넣는 방식"이 협업에 가장 유리합니다.
+
+## 추가 문서
+
+- [docs/optimization/performance-summary.md](./docs/optimization/performance-summary.md): 현재 벤치마크 기준 병목, 품질 평가, GPU 미적용 원인, 최적화 우선순위

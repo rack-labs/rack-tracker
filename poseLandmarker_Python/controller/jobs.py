@@ -17,6 +17,9 @@ async def create_job(
     video: UploadFile | None = File(default=None),
     fps: float = Form(...),
     exerciseType: str | None = Form(default=None),
+    modelAssetPath: str | None = Form(default=None),
+    modelVariant: str | None = Form(default=None),
+    delegate: str | None = Form(default=None),
 ) -> JobCreateResponse:
     source_path = str(MOCK_VIDEO_PATH)
     source_name = MOCK_VIDEO_PATH.name
@@ -30,6 +33,9 @@ async def create_job(
         source_path=source_path,
         fps=fps,
         exercise_type=exerciseType,
+        model_asset_path=modelAssetPath,
+        model_variant=modelVariant,
+        delegate=delegate,
     )
 
 

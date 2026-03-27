@@ -506,3 +506,278 @@ MediaPipe 관련 코드는 `adapter/`, `pose_inference.py` 쪽에 있고, 분석
 - 입력 데이터 구조
 - 출력 데이터 구조
 - 파일별 책임 경계
+
+## 15. 데이터분석 파이프라인 구축 로드맵 확장
+
+현재 프로젝트 구조가 `FastAPI + MediaPipe + LLM` 이므로, 데이터는 이미 확보되었다는 전제 아래 분석 파이프라인은 아래 순서로 설계하는 것이 실무적으로 가장 안정적이다.
+
+```text
+1. video upload
+2. frame extraction (OpenCV)
+3. 2D pose inference (MediaPipe)
+4. skeleton normalization
+5. feature extraction
+6. analysis (rule/stat)
+7. (optional) 3D reconstruction
+8. result structuring
+9. LLM feedback
+10. API response
+```
+
+### 15.1 데이터 표준 정의
+
+JSON 스켈레톤 원본을 그대로 분석에 쓰지 말고, 반드시 내부 표준 포맷으로 정규화해야 한다.
+
+정의 기준:
+
+- 프레임 단위 구조
+- 타임스탬프 포함
+- 관절 index 고정
+- 좌표계 명시
+
+권장 원칙:
+
+- MediaPipe 33개 landmark 기준으로 관절 index를 고정한다.
+- `pixel`, `normalized`, `world` 좌표를 섞지 않고 전처리 단계에서 하나로 통일한다.
+- 시간 정보가 있어야 속도, 가속도, phase segmentation, 멀티뷰 정렬까지 확장 가능하다.
+
+예시:
+
+```json
+{
+  "frame_index": 120,
+  "timestamp": 3.98,
+  "joints": [
+    { "id": 0, "x": 0.52, "y": 0.31, "z": -0.12, "visibility": 0.98 }
+  ]
+}
+```
+
+현재 코드 기준으로는 `service/skeleton_mapper.py` 가 MediaPipe 결과를 분석용 내부 포맷으로 변환하는 1차 책임 지점이 된다.
+
+### 15.2 데이터 정제
+
+실제 분석 품질은 전처리에서 대부분 결정된다.
+
+필수 작업:
+
+- 결측치 제거 또는 보간
+- low visibility joint 필터링
+- smoothing
+- frame rate 정규화
+
+추천 처리:
+
+- moving average
+- Savitzky-Golay filter
+- linear interpolation
+
+흐름:
+
+```text
+raw JSON
+  -> noise 제거
+  -> missing 보정
+  -> temporal smoothing
+  -> clean skeleton
+```
+
+권장 모듈:
+
+- `service/preprocessing.py`
+- 또는 문서의 기존 분리안에 맞춰 `service/analysis_preprocess.py`
+
+### 15.3 좌표 변환 및 정규화
+
+사람마다 키와 카메라 거리, 촬영 각도가 다르기 때문에 원본 좌표를 그대로 비교하면 분석이 불안정하다.
+
+필수 처리:
+
+- 기준 관절 정렬
+- scale normalization
+- 회전 정렬
+
+예시:
+
+```text
+hip_center = (left_hip + right_hip) / 2
+모든 좌표를 hip_center 기준으로 이동
+```
+
+실무 기준:
+
+- pelvis 또는 hip center를 translation 기준점으로 사용
+- shoulder-hip 또는 hip-knee 길이로 scale을 맞춤
+- 좌우 hip 축 또는 torso 방향으로 body yaw를 정렬
+
+이 단계가 끝나야 사람 간 비교, 세션 간 비교, 반복 동작 패턴 분석이 가능하다.
+
+### 15.4 Feature Engineering
+
+분석 파이프라인의 핵심은 pose 결과를 feature로 바꾸는 단계다.
+
+필수 feature:
+
+- 관절 각도
+- 속도와 가속도
+- 운동 단계 분할
+- 바벨 또는 손목 기준 궤적
+- 좌우 비대칭 지표
+
+예시:
+
+```text
+knee_angle = angle(hip, knee, ankle)
+v = Δposition / Δt
+a = Δv / Δt
+```
+
+운동 단계 분할 예:
+
+- 내려가기(eccentric)
+- 정지
+- 올라오기(concentric)
+
+권장 모듈:
+
+- `service/feature_extractor.py`
+- 또는 기존 분리안 기준 `service/analysis_timeseries.py`, `service/analysis_kpis.py`, `service/analysis_reps.py`
+
+### 15.5 이상 탐지 및 패턴 분석
+
+분석 로직은 우선 룰 기반과 통계 기반으로 설계하고, ML 기반은 후순위로 두는 편이 안전하다.
+
+1차 적용:
+
+- 룰 기반: 예를 들어 무릎이 발보다 과도하게 앞으로 나감, 허리 각도 threshold 초과
+- 통계 기반: 평균 대비 deviation, variance, 좌우 차이 추적
+
+후순위:
+
+- clustering
+- anomaly detection
+
+현재 프로젝트 단계에서는 `service/analysis_pipeline.py` 가 조립 책임을 가지고, 실제 규칙 계산은 `service/analysis_events.py`, `service/analysis_issues.py` 계열로 분리하는 구성이 적합하다.
+
+### 15.6 3D 재구성 확장 경로
+
+멀티뷰를 도입할 경우 필수 파이프라인은 아래와 같다.
+
+```text
+camera calibration
+  -> frame sync
+  -> 2D skeleton
+  -> triangulation
+  -> 3D skeleton
+```
+
+핵심 수식:
+
+```text
+x = P X
+P = K [R | T]
+```
+
+실무 포인트:
+
+- 타임스탬프 기반 프레임 정렬이 핵심이다.
+- calibration 정확도가 전체 3D 품질을 결정한다.
+- 따라서 2D 단계에서부터 timestamp와 camera metadata를 유지해야 한다.
+
+권장 모듈:
+
+- `service/reconstruction_3d.py`
+
+### 15.7 분석 결과 구조화
+
+분석 결과는 LLM 입력과 API 응답을 동시에 만족하도록 구조화해야 한다.
+
+예시:
+
+```json
+{
+  "summary": {
+    "rom": 92.3,
+    "symmetry": 0.87,
+    "stability": 0.72
+  },
+  "events": [
+    { "frame": 120, "issue": "knee valgus" }
+  ],
+  "timeseries": {
+    "knee_angle": [],
+    "hip_angle": []
+  }
+}
+```
+
+설계 원칙:
+
+- `summary` 는 화면 요약과 리포트용
+- `events` 는 문제 시점 추적용
+- `timeseries` 는 차트와 디버깅용
+- 원문 skeleton 전체를 다시 계산하지 않아도 되도록 KPI와 이벤트를 충분히 담아야 한다
+
+### 15.8 LLM 피드백 생성
+
+LLM은 분석 엔진이 아니라 자연어 피드백 생성 계층으로 제한하는 것이 맞다.
+
+입력:
+
+- 운동 종류
+- KPI
+- 이상 이벤트
+- 필요한 경우 대표 프레임 또는 phase 요약
+
+출력:
+
+- 코칭 문장
+- 개선 포인트
+
+예시 프롬프트:
+
+```text
+운동: squat
+문제: knee valgus, depth 부족
+데이터: rom=85, symmetry=0.6
+
+피드백 생성
+```
+
+권장 모듈:
+
+- `service/llm_feedback.py`
+
+### 15.9 서비스 분리 기준
+
+현재 프로젝트에 맞춘 권장 서비스 구조는 아래와 같다.
+
+```text
+service/
+    video_reader.py
+    pose_inference.py
+    skeleton_mapper.py
+    preprocessing.py
+    feature_extractor.py
+    analysis_pipeline.py
+    reconstruction_3d.py
+    llm_feedback.py
+```
+
+기존 문서의 `analysis_*` 분리안과 함께 보면 역할은 아래처럼 정리할 수 있다.
+
+- `analysis_pipeline.py`: 전체 흐름 조립
+- `preprocessing.py` 또는 `analysis_preprocess.py`: 정제와 정규화
+- `feature_extractor.py` 또는 `analysis_timeseries.py`: 시계열 feature 계산
+- `analysis_events.py`, `analysis_issues.py`: 룰/통계 기반 판정
+- `reconstruction_3d.py`: 멀티뷰 확장
+- `llm_feedback.py`: 자연어 피드백 생성
+
+### 15.10 운영 관점 체크포인트
+
+- 병목은 대체로 pose inference 에서 발생한다.
+- 정확도는 모델보다 preprocessing 과 normalization 의 영향이 더 크다.
+- 확장성을 고려하면 job queue 구조가 필요하다.
+- 실시간성을 고려하면 window 처리 또는 latest-frame 전략이 필요하다.
+
+한 줄로 정리하면, 데이터분석 파이프라인은 좌표 표준화 -> 정제 -> 정규화 -> feature 추출 -> 판단 -> 피드백 -> 서빙의 흐름으로 설계해야 하고, 성능은 모델 자체보다 전처리와 feature 설계에서 크게 좌우된다.
