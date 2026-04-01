@@ -9,14 +9,10 @@ dependencies = [
     "mediapipe>=0.10.14",
     "numpy>=2.2.0",
     "opencv-python-headless>=4.11.0.86",
-    "onnxruntime-gpu>=1.19.0",
     "pydantic>=2.8.0",
     "python-multipart>=0.0.9",
     "uvicorn>=0.30.0",
 ]
-
-[project.optional-dependencies]
-convert = ["tflite2onnx>=0.4.0"]
 
 [build-system]
 requires = ["hatchling"]
