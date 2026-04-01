@@ -12,6 +12,7 @@ from uuid import uuid4
 from fastapi import HTTPException
 
 from config import (
+    CPP_WORKER_ENABLED,
     DEFAULT_MODEL_ASSET_PATH,
     DEFAULT_MODEL_VARIANT,
     EXTRACTED_FRAME_DIR,
@@ -275,7 +276,7 @@ class JobManager:
             sampling_mode="target_fps",
             target_fps=float(requested_sampling_fps) if requested_sampling_fps is not None else None,
             output_dir=EXTRACTED_FRAME_DIR / job.job_id,
-            save_images=False,
+            save_images=CPP_WORKER_ENABLED,
             convert_bgr_to_rgb=False,
         )
         result = self._video_reader.extract_frames(options)

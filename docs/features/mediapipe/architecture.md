@@ -60,7 +60,7 @@
 - `poseLandmarker_Python/service/pose_inference.py`
   - 프레임별 MediaPipe 추론 실행
   - 33개 랜드마크 직렬화
-  - 프레임별 benchmark 측정치 생성
+  - 프레임별 benchmark 측정치 생성  
 - `poseLandmarker_Python/adapter/mediapipe_adapter.py`
   - MediaPipe import
   - `PoseLandmarker` 생성/종료
@@ -463,3 +463,313 @@ partial failure, frame skip, degraded-success 정책은 아직 구현돼 있지 
 - segmentation mask 외부 노출
 - frame-level partial failure 복구
 - 실제 LLM 기반 피드백 생성
+
+## 11. Node Worker 전환 목표 아키텍처
+
+이 절은 현재 구현 설명이 아니라 `poseLandmarker_Python`의 MediaPipe 추론부를 Node.js 워커로 교체할 때 적용할 목표 구조를 정의한다.
+
+현재 PoC에서 확인된 제약:
+
+- `@mediapipe/tasks-vision`을 순수 Node.js subprocess에서 직접 초기화하면 `document is not defined`가 발생했다.
+- 즉, 현재 선택한 MediaPipe JS 런타임은 이 저장소 환경에서 브라우저 DOM 전역을 요구한다.
+- 따라서 현재 성능 검증 단계에서는 "순수 Node 추론"이 아니라 "서버에서 headless browser를 띄워 MediaPipe JS를 실행"하는 경로를 목표 구조로 둔다.
+- 이 결정의 목적은 엔드포인트 기기 성능 의존을 없애는 것이며, 브라우저 없는 서버 런타임이 장기적으로 더 적합할 수 있다는 판단은 유지한다.
+
+전환 원칙:
+
+- FastAPI API 표면과 최종 결과 JSON shape는 유지한다.
+- Python은 오케스트레이션, 파일 관리, 후처리 계층을 계속 담당한다.
+- Node.js는 MediaPipe 추론 엔진 계층만 담당한다.
+- Python과 Node의 경계는 `node_worker_client` 한 곳으로 고정한다.
+- 현재 PoC 기준 Node 워커 내부 런타임은 headless browser를 포함할 수 있다.
+
+### 11.1 목표 계층 구조
+
+```text
+FastAPI app
+  -> controller.jobs
+    -> service.job_manager.create_job()
+      -> background task: JobManager._run_job()
+        -> service.video_reader.extract_frames()
+        -> service.pose_inference.run()
+          -> service.node_worker_client.NodeWorkerClient.run_pose_inference()
+            -> node_worker subprocess
+              -> headless browser runtime
+                -> MediaPipe Tasks Vision runtime
+        -> service.skeleton_mapper.map_landmarks()
+        -> service.analysis_pipeline.analyze()
+        -> service.benchmarking.build_result()
+        -> service.llm_feedback.generate()
+```
+
+핵심 차이:
+
+- `service/pose_inference.py`는 더 이상 `adapter/mediapipe_adapter.py`에 직접 의존하지 않는다.
+- 추론 엔진 선택, 프로세스 호출, stdout/stderr 처리, 타임아웃 처리는 `service/node_worker_client.py`로 이동한다.
+- 현재 Node 워커 내부의 핵심 역할은 브라우저 없는 JS 런타임을 강제하는 것이 아니라, 서버 측 headless browser 실행을 캡슐화하는 것이다.
+- `skeleton_mapper`, `analysis_pipeline`, `benchmarking`, `llm_feedback`는 가능한 한 기존 책임을 유지한다.
+
+### 11.2 `node_worker_client` 배치와 책임
+
+권장 배치 위치:
+
+- `poseLandmarker_Python/service/node_worker_client.py`
+
+`NodeWorkerClient`가 가져야 할 책임:
+
+- Node 워커 실행 명령 조립
+- 입력 payload 직렬화
+- subprocess 실행과 timeout 적용
+- stdout JSON 수집
+- stderr 진단 로그 수집
+- 종료 코드 검증
+- worker 응답을 `PoseInferenceResult` 또는 동등한 내부 도메인 구조로 역직렬화
+- worker 실패를 Python 예외 계층으로 변환
+
+`NodeWorkerClient`가 맡지 않을 책임:
+
+- FastAPI request parsing
+- frame extraction
+- skeleton mapping
+- benchmark 최종 조립
+- 결과 페이지네이션
+
+즉, 이 계층은 "Node를 어떻게 호출하는가"만 캡슐화하고, "추론 결과를 어떻게 후처리하는가"는 상위 Python 서비스가 계속 담당한다.
+
+추가 원칙:
+
+- `node_worker_client`는 Node 워커 내부 구현이 순수 Node인지 headless browser인지 알 필요가 없다.
+- 상위 Python 계층은 "서버에서 추론이 수행된다"는 사실만 보장받으면 된다.
+
+### 11.3 권장 인터페이스
+
+```python
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+
+from schema.frame import ExtractedFrame
+from schema.pose import PoseInferenceOptions, PoseInferenceResult
+
+
+@dataclass(slots=True)
+class NodeWorkerExecution:
+    command: list[str]
+    cwd: Path
+    timeout_seconds: float
+
+
+class NodeWorkerClientError(Exception):
+    pass
+
+
+class NodeWorkerProcessError(NodeWorkerClientError):
+    pass
+
+
+class NodeWorkerTimeoutError(NodeWorkerClientError):
+    pass
+
+
+class NodeWorkerProtocolError(NodeWorkerClientError):
+    pass
+
+
+class NodeWorkerClient:
+    def run_pose_inference(
+        self,
+        frames: list[ExtractedFrame],
+        options: PoseInferenceOptions,
+        source_path: str,
+    ) -> PoseInferenceResult:
+        raise NotImplementedError
+```
+
+인터페이스 설계 의도:
+
+- `PoseInferenceService`는 워커 구현체 종류를 몰라도 된다.
+- 현재 기본 구현체는 subprocess 기반이어야 한다.
+- 장기적으로 HTTP 또는 장기 실행 프로세스 기반 구현체로 교체하더라도 상위 서비스 계약은 유지한다.
+
+### 11.4 기본 구현체와 주입 방식
+
+초기 기본 구현체는 `SubprocessNodeWorkerClient`다.
+
+```python
+class PoseInferenceService:
+    def __init__(self, worker_client: NodeWorkerClient | None = None) -> None:
+        self._worker_client = worker_client or SubprocessNodeWorkerClient(...)
+```
+
+구성 원칙:
+
+- `PoseInferenceService`는 `NodeWorkerClient` 인터페이스에만 의존한다.
+- 기본값은 subprocess 구현체를 생성하되, 테스트에서는 mock 또는 fake client를 주입할 수 있어야 한다.
+- Python 코드 여러 곳에서 직접 `node ...` 명령을 흩뿌리지 않는다.
+- Node 워커 내부에서 browser launch 전략이 바뀌더라도 Python 주입 구조는 그대로 유지한다.
+
+### 11.5 Python-Node 데이터 흐름
+
+목표 데이터 흐름은 아래와 같다.
+
+1. `JobManager`가 업로드 비디오 저장 또는 목업 비디오 선택
+2. `video_reader.extract_frames()`가 프레임 파일과 메타데이터 생성
+3. `PoseInferenceService`가 `NodeWorkerClient`에 추론 요청
+4. `NodeWorkerClient`가 frame 목록과 옵션을 JSON payload로 직렬화
+5. Node 워커가 headless browser를 기동하고 로컬 브라우저 페이지를 연다
+6. browser 런타임이 frame image path와 model asset을 읽어 MediaPipe JS 추론 수행
+7. Node 워커가 frame별 랜드마크와 delegate/runtime 메타데이터를 JSON으로 반환
+8. Python이 이를 `PoseInferenceResult`로 역직렬화
+9. 기존 `skeleton_mapper`, `analysis_pipeline`, `benchmarking`, `llm_feedback`가 후속 처리
+
+초기 전송 방식은 image buffer 직접 전달이 아니라 `imagePath` 전달 방식을 권장한다.
+
+이유:
+
+- Python과 Node 사이에 대용량 바이너리 버퍼 직렬화를 피할 수 있다.
+- 기존 `video_reader`가 이미 프레임 파일을 생성하고 있으므로 재사용이 쉽다.
+- subprocess stdin/stdout은 JSON 메타데이터 교환에만 집중할 수 있다.
+- headless browser 방식에서도 frame asset 제공 방식이 단순하다.
+
+### 11.6 입력 payload 계약
+
+권장 입력 payload는 아래 shape를 기준으로 한다.
+
+```json
+{
+  "sourcePath": "C:/video.mp4",
+  "options": {
+    "modelAssetPath": "C:/models/pose_landmarker_full.task",
+    "modelVariant": "full",
+    "runningMode": "VIDEO",
+    "delegate": "GPU",
+    "numPoses": 1,
+    "minPoseDetectionConfidence": 0.5,
+    "minPosePresenceConfidence": 0.5,
+    "minTrackingConfidence": 0.5,
+    "outputSegmentationMasks": false
+  },
+  "frames": [
+    {
+      "frameIndex": 0,
+      "timestampMs": 0.0,
+      "imagePath": "C:/tmp/frames/job_x/frame_000000.jpg"
+    }
+  ]
+}
+```
+
+계약 원칙:
+
+- `sourcePath`는 원본 비디오 기준 경로다.
+- `frames[].imagePath`는 Node 런타임에서 직접 접근 가능한 절대 경로여야 한다.
+- `options`는 현재 `PoseInferenceOptions`의 실사용 필드를 우선 반영한다.
+- 경로 체계는 한 실행 컨텍스트 안에서 Windows 경로와 WSL 경로를 혼합하지 않는다.
+
+### 11.7 출력 payload 계약
+
+권장 출력 payload는 아래 shape를 기준으로 한다.
+
+```json
+{
+  "sourcePath": "C:/video.mp4",
+  "runningMode": "VIDEO",
+  "modelName": "pose_landmarker_full.task",
+  "frameCount": 120,
+  "detectedFrameCount": 116,
+  "requestedDelegate": "GPU",
+  "actualDelegate": "CPU",
+  "delegateFallbackApplied": true,
+  "delegateErrors": {
+    "GPU": "RuntimeError: ..."
+  },
+  "frames": [
+    {
+      "frameIndex": 0,
+      "timestampMs": 0.0,
+      "poseDetected": true,
+      "landmarks": []
+    }
+  ]
+}
+```
+
+출력 매핑 원칙:
+
+- 최상위 메타데이터는 기존 `PoseInferenceResult` 필드와 1:1로 대응시킨다.
+- `frames[].frameIndex`, `frames[].timestampMs`, `frames[].poseDetected`, `frames[].landmarks`는 현재 Python 후처리 계층이 기대하는 필드를 유지한다.
+- `world_landmarks`, `segmentation_mask`는 현재 외부 미노출 항목이므로 초기 전환 범위에서는 선택적 필드로 둔다.
+
+### 11.8 오류 및 예외 정책
+
+Node 워커 경계에서는 최소한 아래 오류를 구분한다.
+
+- 프로세스 실행 자체 실패
+  - 예: `node` 바이너리 없음, 엔트리 파일 없음
+  - Python 예외: `NodeWorkerProcessError`
+- timeout
+  - Python 예외: `NodeWorkerTimeoutError`
+- 프로토콜 위반
+  - 예: stdout이 JSON이 아님, 필수 필드 누락
+  - Python 예외: `NodeWorkerProtocolError`
+- 워커 내부 추론 실패
+  - 예: 모델 로드 실패, delegate 초기화 실패, 프레임 읽기 실패, browser launch 실패
+  - worker JSON의 `error` 필드를 읽어 `NodeWorkerClientError` 하위 예외로 변환
+
+상위 실패 처리 원칙은 현재 구현을 유지한다.
+
+- worker 호출 실패는 job 전체 실패로 처리한다.
+- 특정 프레임만 건너뛰는 partial failure 정책은 초기 전환 범위에 포함하지 않는다.
+
+### 11.9 로그 및 진단 원칙
+
+Python 쪽 기본 진단 로그에 포함할 항목:
+
+- worker command
+- worker cwd
+- timeout 설정값
+- source video path
+- frame count
+- requested delegate
+- exit code
+
+로그 분리 원칙:
+
+- Node 워커의 결과 JSON은 stdout 전용으로 사용한다.
+- Node 워커의 진단 로그는 stderr로 분리한다.
+- 기본 로그에는 전체 frame payload나 전체 landmark 배열을 남기지 않는다.
+- browser console 로그는 가능하면 Node 워커가 수집해 stderr로 재노출한다.
+
+이 분리는 JSON 파싱 안정성과 운영 진단성을 동시에 확보하기 위한 것이다.
+
+### 11.10 구현체 확장 전략
+
+장기적으로 아래 구현체를 추가할 수 있다.
+
+- `SubprocessNodeWorkerClient`
+- `HttpNodeWorkerClient`
+
+하지만 현재 목표 구현은 subprocess 방식으로 한정한다.
+
+이유:
+
+- 별도 Node 서버 기동과 포트 관리를 도입하지 않아도 된다.
+- 초기 구현 범위를 가장 작게 유지할 수 있다.
+- 상위 Python 서비스 구조를 거의 그대로 보존할 수 있다.
+- 서버에서 headless browser 기반 성능 검증을 빠르게 시작할 수 있다.
+
+현재 성능 해석 원칙:
+
+- headless browser는 클라이언트 브라우저보다 엔드포인트 기기 성능 의존이 적다.
+- 그러나 브라우저 없는 서버 네이티브 런타임과 비교하면 일반적으로 오버헤드가 더 크다.
+- 따라서 현재 benchmark 해석은 "운영 최적화 완료"가 아니라 "서버 측 실행 가능성 및 상대 성능 확인"으로 한정해야 한다.
+
+서버형 전환이 필요한 조건:
+
+- 프로세스 기동 비용이 병목이 될 때
+- 모델 초기화 재사용이 필요할 때
+- worker pool 또는 헬스체크가 필요할 때
+- Python과 Node를 독립 배포해야 할 때
+
+그 경우에도 상위 계층 영향 범위는 `node_worker_client` 내부로 제한하는 것이 목표다.

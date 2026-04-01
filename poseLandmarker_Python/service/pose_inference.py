@@ -57,7 +57,10 @@ POSE_LANDMARK_NAMES = [
 
 
 class PoseInferenceService:
-    def __init__(self, adapter: MediaPipeAdapter | None = None) -> None:
+    def __init__(
+        self,
+        adapter: MediaPipeAdapter | None = None,
+    ) -> None:
         self._adapter = adapter or MediaPipeAdapter()
 
     def infer(
@@ -76,17 +79,30 @@ class PoseInferenceService:
         source_path: str = "",
     ) -> PoseInferenceResult:
         resolved_options = options or self._default_options()
-        frame_results = list(self.iter_infer(frames=frames, options=resolved_options))
+        return self._run_local(
+            frames=frames,
+            options=resolved_options,
+            source_path=source_path,
+        )
+
+    def _run_local(
+        self,
+        frames: list[ExtractedFrame],
+        options: PoseInferenceOptions,
+        source_path: str,
+    ) -> PoseInferenceResult:
+        frame_results = list(self.iter_infer(frames=frames, options=options))
         actual_delegate = self._adapter.active_delegate()
         return PoseInferenceResult(
             source_path=source_path,
-            running_mode=resolved_options.running_mode,
-            model_name=Path(resolved_options.model_asset_path).name,
+            running_mode=options.running_mode,
+            model_name=Path(options.model_asset_path).name,
+            inference_backend="python",
             frame_count=len(frames),
             detected_frame_count=sum(1 for frame in frame_results if frame.pose_detected),
-            requested_delegate=resolved_options.delegate,
+            requested_delegate=options.delegate,
             actual_delegate=actual_delegate,  # type: ignore[arg-type]
-            delegate_fallback_applied=resolved_options.delegate != actual_delegate,
+            delegate_fallback_applied=options.delegate != actual_delegate,
             delegate_errors=self._adapter.delegate_errors(),
             frames=frame_results,
         )
@@ -221,3 +237,4 @@ class PoseInferenceService:
             model_asset_path=DEFAULT_MODEL_ASSET_PATH,
             model_variant=DEFAULT_MODEL_VARIANT,
         )
+

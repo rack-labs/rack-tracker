@@ -76,6 +76,7 @@ class BenchmarkService:
                     extraction_result.source_fps,
                 ),
                 sourceVideoFps=round(extraction_result.source_fps, 3),
+                inferenceBackend=inference_result.inference_backend,
                 requestedSamplingFps=job_metadata.get("requestedSamplingFps"),
                 effectiveSamplingFps=round(effective_sampling_fps, 3),
                 requestedDelegate=inference_result.requested_delegate,

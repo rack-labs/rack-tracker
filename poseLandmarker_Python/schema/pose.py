@@ -7,6 +7,7 @@ from typing import Literal
 RunningMode = Literal["IMAGE", "VIDEO", "LIVE_STREAM"]
 ModelVariant = Literal["lite", "full", "heavy"]
 Delegate = Literal["GPU", "CPU"]
+InferenceBackend = Literal["python"]
 
 
 class PoseInferenceServiceError(Exception):
@@ -116,6 +117,7 @@ class PoseInferenceResult:
     source_path: str
     running_mode: RunningMode
     model_name: str
+    inference_backend: InferenceBackend
     frame_count: int
     detected_frame_count: int
     requested_delegate: Delegate

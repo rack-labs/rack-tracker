@@ -15,12 +15,21 @@
 - 단순히 Python 코드를 유지한 채 delegate 옵션만 바꾸는 접근으로는 이 문제가 해결되지 않을 가능성이 높다.
 - 반면 현재 저장소의 `poseLandmarker_JavaScript`는 브라우저 전제 코드이므로, 이를 그대로 서버용 Node.js 추론 엔진으로 재사용하기는 어렵다.
 
+## PoC 확인 결과와 현재 결정
+- 2026-03-27 기준 PoC에서 `@mediapipe/tasks-vision`을 순수 Node.js subprocess에서 직접 초기화하면 `document is not defined` 오류가 발생했다.
+- 즉, 현재 선택한 MediaPipe JavaScript 런타임은 이 저장소 환경에서 브라우저 DOM 전역 없이 바로 서버 추론 엔진으로 동작하지 않았다.
+- 이 결과는 "Node 워커 경계 설계" 자체의 실패가 아니라, "선택한 JS MediaPipe 런타임의 실행 환경 가정" 문제로 해석한다.
+- 엔드포인트 기기 성능 의존을 피하기 위해 연산은 계속 서버에서 수행해야 한다.
+- 따라서 현재 단계의 우회 전략은 "클라이언트 브라우저 추론"이 아니라 "서버에서 headless browser 런타임을 띄워 MediaPipe JS를 실행"하는 것이다.
+- 이 방식은 최종 운영 정답으로 확정한 것이 아니라, 현재 목표인 성능 검증과 GPU 사용 가능성 검증을 위한 임시 경로다.
+
 ## 제안 방향
 - 기존 `poseLandmarker_Python`를 기준 구현으로 유지한다.
 - Node.js MediaPipe 코드는 `poseLandmarker_Python/node_worker/` 아래에 둔다.
 - Python FastAPI 서버는 그대로 유지하고, MediaPipe 추론 실행 경로만 Node.js subprocess 워커 호출로 교체한다.
 - 핵심 원칙은 "전체 프로젝트 재작성"이 아니라 "추론 엔진 레이어만 분기"다.
 - 이번 목표는 별도 Node 서버를 띄우는 구조가 아니라, Python이 필요할 때 Node 프로세스를 실행하는 구조다.
+- 단, 현재 PoC 단계의 실제 워커 내부 런타임은 순수 Node가 아니라 headless browser를 포함할 수 있다.
 
 ## 권장 구조 판단
 
@@ -35,12 +44,14 @@
 1. `poseLandmarker_Python`는 그대로 유지
 2. `poseLandmarker_Python/node_worker/`에 Node.js 추론 워커 추가
 3. Python이 subprocess로 Node worker를 호출
-4. Node worker가 JSON 결과를 반환
+4. Node worker가 내부에서 headless browser 런타임을 띄운다
+5. browser 런타임이 MediaPipe JS를 실행한다
+6. Node worker가 JSON 결과를 반환
 
 이유는 아래와 같다.
 - FastAPI API 표면과 기존 결과 구조를 그대로 유지하기 쉽다.
 - PoC와 초기 구현 범위를 가장 작게 잡을 수 있다.
-- 별도 Node 서버 운영, 포트 관리, 프로세스 생명주기 관리가 필요 없다.
+- 별도 장기 실행 Node 서버 운영, 포트 관리, 프로세스 생명주기 관리를 바로 도입할 필요가 없다.
 - 나중에 필요하면 동일 계약을 유지한 채 장기 실행 Node 서버형으로 옮길 수 있다.
 
 ## 제안 폴더 구조
@@ -64,6 +75,7 @@ rack-tracker-forked/
 - 독립 `package.json`과 Node 의존성 보유
 - 입력: frame batch 또는 frame directory + options JSON
 - 출력: Python `PoseInferenceResult`와 호환 가능한 JSON
+- 현재 PoC 기준 내부 실행 엔진은 headless browser 기반 MediaPipe JS일 수 있다
 
 이 경우 Python 프로젝트는 아래처럼 바뀐다.
 - `service/pose_inference.py`가 직접 MediaPipe Python을 호출하지 않음
@@ -88,16 +100,23 @@ rack-tracker-forked/
 1. Python FastAPI가 업로드와 job 생성 처리
 2. Python이 OpenCV 기반 frame extraction 수행
 3. Python이 추출된 frame 메타데이터와 옵션을 subprocess로 `node_worker`에 전달
-4. Node worker가 MediaPipe 추론 수행
-5. Node worker가 frame별 landmark 결과와 delegate/runtime 메타데이터를 JSON으로 반환
-6. Python이 기존 `skeleton_mapper`, `analysis_pipeline`, `benchmarking` 흐름을 계속 수행
+4. Node worker가 headless browser 런타임을 기동
+5. browser 런타임이 MediaPipe JS 추론 수행
+6. Node worker가 frame별 landmark 결과와 delegate/runtime 메타데이터를 JSON으로 반환
+7. Python이 기존 `skeleton_mapper`, `analysis_pipeline`, `benchmarking` 흐름을 계속 수행
 
 ### 이 구조의 장점
 - 기존 API 표면을 거의 유지할 수 있다.
 - benchmark와 결과 파일 형식을 재사용하기 쉽다.
 - Node.js 실험 범위를 추론 엔진으로 제한할 수 있다.
-- 별도 서버 프로세스 없이도 바로 붙일 수 있다.
+- 엔드포인트 기기 성능 의존을 제거하면서도 MediaPipe JS 경로를 서버에서 검증할 수 있다.
 - 장기적으로 다른 추론 엔진으로 교체할 때도 worker 경계를 재사용할 수 있다.
+
+### 현재 선택 이유
+- 클라이언트 브라우저 추론은 스마트폰, 저사양 노트북, 웹캠 단말 성능에 직접 묶인다.
+- 이번 검증의 목적은 "브라우저를 쓰느냐"가 아니라 "엔드포인트가 아닌 서버에서 연산하느냐"다.
+- 서버에서 headless browser를 띄우면 브라우저 오버헤드는 생기지만, 클라이언트 성능 병목은 제거할 수 있다.
+- 따라서 현재 단계에서는 "운영 최적 구조"보다 "서버 측 성능 검증이 가능한 구조"를 우선한다.
 
 ## Node 워커 설계 원칙
 
@@ -128,8 +147,8 @@ rack-tracker-forked/
 
 ### 중요한 제약
 - `poseLandmarker_JavaScript` 브라우저 코드를 그대로 가져오지 않는다.
-- `document`, `video`, canvas, CDN 기반 WASM 로딩 같은 브라우저 의존은 제거 대상이다.
-- Node 런타임에서 파일 입력 기반 batch inference가 가능한지 먼저 PoC로 검증해야 한다.
+- `document`, `video`, canvas, CDN 기반 WASM 로딩 같은 브라우저 의존은 장기적으로 제거 대상이지만, 현재 PoC 단계에서는 headless browser 내부로 격리한다.
+- 순수 Node 런타임에서 파일 입력 기반 batch inference는 현재 PoC에서 실패했다.
 - 초기 연결 방식은 subprocess 호출을 기준으로 설계한다.
 - Python 코드 여러 곳에서 직접 `node ...` 명령을 흩뿌리지 말고, 전용 client 계층으로 감싼다.
 
@@ -140,12 +159,14 @@ rack-tracker-forked/
 - Python이 job 처리 중 필요할 때마다 Node 프로세스를 실행한다.
 - 입력은 stdin JSON 또는 임시 파일 JSON 중 하나로 전달한다.
 - 출력은 stdout JSON 또는 결과 파일 JSON으로 수집한다.
+- Node worker 내부에서는 필요하면 headless browser 프로세스를 추가로 띄운다.
 
 ### 권장 이유
 - 구현 범위가 작다.
 - 장애 지점이 적다.
 - 서버 두 개의 기동 순서를 관리할 필요가 없다.
 - 이후 서버형으로 바꿔도 입출력 계약만 유지하면 상위 계층 변경을 줄일 수 있다.
+- 엔드포인트 기기와 무관한 서버 성능 검증을 바로 시작할 수 있다.
 
 ### 장기 전환 가능성
 향후 아래 조건이 생기면 Node 서버형 전환을 검토할 수 있다.
@@ -363,6 +384,8 @@ class PoseInferenceService:
 - 초기 버전은 image buffer 직렬화보다 `imagePath` 전달 방식이 더 단순하다.
 - Node worker stdout은 결과 JSON 전용으로 두고, 진단 로그는 stderr로 분리하는 편이 안전하다.
 - Python 쪽 상위 계층은 `NodeWorkerClient`의 구현체 종류를 몰라도 동작해야 한다.
+- headless browser 방식은 "브라우저가 필요하다"는 뜻이지 "클라이언트 디바이스에서 연산한다"는 뜻이 아니다.
+- 성능 비교 시에는 "클라이언트 브라우저 vs 서버 headless browser"와 "서버 headless browser vs 서버 네이티브 런타임"을 구분해서 해석해야 한다.
 
 ## 구현 범위 후보
 - `poseLandmarker_Python/node_worker/` 신설
@@ -382,7 +405,7 @@ class PoseInferenceService:
 
 ### 1단계: PoC
 - 순수 Node.js 런타임에서 MediaPipe Tasks Vision이 초기화되는지 확인
-- 브라우저 API 없이 이미지 파일 또는 frame buffer 기반 추론이 가능한지 확인
+- 실패 시 headless browser 런타임으로 우회해 서버형 batch inference가 가능한지 확인
 - 최소 1개 영상에서 frame batch inference 결과를 JSON으로 뽑아본다
 
 ### 2단계: 워커 경계 고정
@@ -402,6 +425,7 @@ class PoseInferenceService:
 
 ## 기술적 리스크
 - MediaPipe JavaScript 또는 Tasks Vision이 순수 Node.js에서 공식적으로 얼마나 안정적인지 불확실하다.
+- headless browser 방식은 브라우저 기동 비용과 메모리 사용량이 추가된다.
 - Node 환경에서 GPU delegate가 실제로 의미 있는 가속 경로를 제공하는지 별도 검증이 필요하다.
 - 프레임 전달 방식이 비효율적이면 Python-Node 경계가 오히려 병목이 될 수 있다.
 - 브라우저와 Node의 WASM/GPU 실행 조건 차이 때문에 초기화 자체가 실패할 수 있다.
@@ -426,10 +450,11 @@ class PoseInferenceService:
 5. 동일 영상 기준 delegate 메타데이터와 처리 시간을 비교한다.
 
 ## 현재 결론
-- 이번 목표 기준으로는 `poseLandmarker_Python/node_worker/` 내부에 Node.js MediaPipe 워커를 두고, Python이 subprocess로 이를 호출하는 방식이 가장 현실적이다.
-- 즉 분기 단위는 "별도 백엔드 서버"가 아니라 "기존 Python 백엔드 안의 추론 워커 교체"로 잡는 것이 맞다.
-- 이후 필요하면 같은 JSON 계약을 유지한 채 장기 실행 Node 서버형으로 옮길 수 있지만, 이번 단계의 목표는 아니다.
-- 본 구현에 바로 들어가기 전에, 먼저 Node.js 런타임에서 MediaPipe 추론이 서버형이 아닌 batch subprocess workflow로 실제 성립하는지 PoC를 통과해야 한다.
+- 이번 목표 기준으로는 `poseLandmarker_Python/node_worker/` 내부에 Node.js 워커를 두고, Python이 subprocess로 이를 호출하는 방식이 가장 현실적이다.
+- 다만 순수 Node.js MediaPipe 런타임은 현재 PoC에서 `document is not defined`로 실패했다.
+- 따라서 지금 단계의 실제 개발 방향은 "Node worker 내부에서 headless browser 런타임으로 우회"다.
+- 즉 분기 단위는 여전히 "별도 백엔드 서버"가 아니라 "기존 Python 백엔드 안의 추론 워커 교체"로 잡는다.
+- 이후 필요하면 같은 JSON 계약을 유지한 채 장기 실행 Node 서버형 또는 브라우저 없는 서버 런타임으로 옮길 수 있지만, 이번 단계의 목표는 아니다.
 
 ## 참고 자료
 - `docs/features/mediapipe/issue-18-enable-gpu-delegate.md`
