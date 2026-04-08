@@ -10,6 +10,8 @@ from typing import Any
 from config.config import BENCHMARK_DIR
 from schema.benchmark import (
     BenchmarkFrameMetric,
+    BenchmarkLlmCallResult,
+    BenchmarkLlmPromptDiagnostics,
     BenchmarkQualitySummary,
     BenchmarkResult,
     BenchmarkRunMetadata,
@@ -32,8 +34,11 @@ class BenchmarkService:
         extraction_result: FrameExtractionResult,
         inference_result: PoseInferenceResult,
         analysis_result: dict[str, Any],
+        llm_prompt_diagnostics: dict[str, Any] | None,
+        llm_call_result: dict[str, Any] | None,
         frame_extraction_ms: float,
         analysis_ms: float,
+        llm_feedback_ms: float | None,
         total_elapsed_ms: float,
         started_at: datetime,
         completed_at: datetime,
@@ -52,6 +57,7 @@ class BenchmarkService:
             frame_metrics=frame_metrics,
             frame_extraction_ms=frame_extraction_ms,
             analysis_ms=analysis_ms,
+            llm_feedback_ms=llm_feedback_ms,
             total_elapsed_ms=total_elapsed_ms,
         )
         quality_summary = self._build_quality_summary(
@@ -96,6 +102,7 @@ class BenchmarkService:
                 inferenceMs=round(inference_total_ms, 3),
                 serializationMs=round(serialization_total_ms, 3),
                 analysisMs=round(analysis_ms, 3),
+                llmFeedbackMs=round(llm_feedback_ms, 3) if llm_feedback_ms is not None else None,
                 totalElapsedMs=round(total_elapsed_ms, 3),
                 stageStats=stage_stats,
             ),
@@ -108,6 +115,16 @@ class BenchmarkService:
                 sample_interval_ms=sample_interval_ms,
             ),
             frameMetrics=frame_metrics,
+            llmPromptDiagnostics=(
+                BenchmarkLlmPromptDiagnostics.model_validate(llm_prompt_diagnostics)
+                if llm_prompt_diagnostics
+                else None
+            ),
+            llmCallResult=(
+                BenchmarkLlmCallResult.model_validate(llm_call_result)
+                if llm_call_result
+                else None
+            ),
         )
         return self.save_result(result)
 
@@ -120,6 +137,16 @@ class BenchmarkService:
             "timingSummary": result.timingSummary.model_dump(),
             "qualitySummary": result.qualitySummary.model_dump(),
             "comparisonTags": result.comparisonTags,
+            "llmPromptDiagnostics": (
+                result.llmPromptDiagnostics.model_dump()
+                if result.llmPromptDiagnostics is not None
+                else None
+            ),
+            "llmCallResult": (
+                result.llmCallResult.model_dump()
+                if result.llmCallResult is not None
+                else None
+            ),
         }
         frame_payload = {
             "benchmarkRunId": result.run.benchmarkRunId,
@@ -147,9 +174,10 @@ class BenchmarkService:
         frame_metrics: list[BenchmarkFrameMetric],
         frame_extraction_ms: float,
         analysis_ms: float,
+        llm_feedback_ms: float | None,
         total_elapsed_ms: float,
     ) -> list[BenchmarkStageStats]:
-        return [
+        stages = [
             self._fixed_stage_stats(
                 key="frame_extraction",
                 label="Frame Extraction",
@@ -181,6 +209,16 @@ class BenchmarkService:
                 total_elapsed_ms=total_elapsed_ms,
             ),
         ]
+        if llm_feedback_ms is not None:
+            stages.append(
+                self._fixed_stage_stats(
+                    key="llm_feedback",
+                    label="LLM Feedback",
+                    total_ms=llm_feedback_ms,
+                    total_elapsed_ms=total_elapsed_ms,
+                )
+            )
+        return stages
 
     def _build_quality_summary(
         self,
