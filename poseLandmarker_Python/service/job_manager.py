@@ -250,11 +250,13 @@ class JobManager:
     def _execute_pipeline(self, job: JobRecord, persist_skeleton: bool) -> None:
         started_at = datetime.now(timezone.utc)
         total_started = perf_counter()
-        self._set_progress(job, "extracting", 1, 4, 0.25)
+        self._set_progress(job, "extracting", 1, 5, 0.2)
         extraction_started = perf_counter()
         extraction_options, extraction_result = self._extract_frames(job)
         frame_extraction_ms = (perf_counter() - extraction_started) * 1000.0
 
+        self._set_progress(job, "analyzing", 2, 5, 0.4, {"extracting": frame_extraction_ms})
+        inference_started = perf_counter()
         inference_options = self._build_inference_options(job)
         inference_result = self._pose_inference.run(
             extraction_result.frames,
@@ -276,8 +278,9 @@ class JobManager:
             llmFeedback=LlmFeedbackResult(),
             benchmark={},
         )
+        inference_ms = (perf_counter() - inference_started) * 1000.0
 
-        self._set_progress(job, "analyzing", 2, 4, 0.75)
+        self._set_progress(job, "computing", 3, 5, 0.6, {"analyzing": inference_ms})
         analysis_started = perf_counter()
         analysis = self._analysis_pipeline.analyze(
             skeleton,
@@ -294,7 +297,7 @@ class JobManager:
             coach_prompt_payload,
         )
 
-        self._set_progress(job, "generating_feedback", 3, 4, 0.9)
+        self._set_progress(job, "generating_feedback", 4, 5, 0.85, {"computing": analysis_ms})
         llm_started = perf_counter()
         llm_feedback, llm_call_metrics = self._llm_feedback.generate(
             analysis,
@@ -326,7 +329,7 @@ class JobManager:
         ]
         job.result.benchmark = job.benchmark
 
-        self._set_progress(job, "completed", 4, 4, 1.0)
+        self._set_progress(job, "completed", 5, 5, 1.0, {"generating_feedback": llm_feedback_ms})
         job.status = "completed"
 
     def _extract_frames(self, job: JobRecord):
@@ -488,13 +491,16 @@ class JobManager:
         current_step: int,
         total_steps: int,
         ratio: float,
+        stage_durations_ms: dict[str, float] | None = None,
     ) -> None:
+        existing = job.progress.stageDurationsMs if job.progress else {}
         job.status = stage
         job.progress = JobProgress(
             stage=stage,
             currentStep=current_step,
             totalSteps=total_steps,
             ratio=ratio,
+            stageDurationsMs={**existing, **(stage_durations_ms or {})},
         )
 
     def _fail_job(self, job: JobRecord, exc: Exception) -> None:
@@ -502,7 +508,7 @@ class JobManager:
         job.progress = JobProgress(
             stage="failed",
             currentStep=0,
-            totalSteps=4,
+            totalSteps=5,
             ratio=0.0,
         )
         job.error = {
