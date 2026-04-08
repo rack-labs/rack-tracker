@@ -81,6 +81,9 @@ uv run main.py
 
 - `fps`: 필수 입력, 예시 `10`
 - `exerciseType`: 선택 입력, 예시 `back_squat`
+- `bodyweightKg`: 선택 입력, 예시 `125`
+- `externalLoadKg`: 선택 입력, 예시 `260`
+- `barPlacementMode`: 선택 입력, `auto`, `high_bar`, `low_bar`
 - `video`: 비워도 됨
 - `modelAssetPath`: 보통 비워도 됨
 - `modelVariant`: 필요하면 `lite`, `full`, `heavy`
@@ -90,6 +93,7 @@ uv run main.py
 
 - 현재 구현에서는 `video`를 비워도 job 생성이 가능합니다.
 - 파일을 업로드하지 않으면 내부적으로 `src/video/backSquat.mp4`를 사용합니다.
+- `barPlacementMode=auto`이면 분석 결과에 `barPlacementResolved`가 함께 기록됩니다.
 
 정상 응답 예시:
 

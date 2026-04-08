@@ -16,6 +16,7 @@
 ## 실행 전에 알아둘 점
 
 이 프로젝트는 `uv`로 Python 패키지를 관리하고 앱을 실행합니다.
+권장 Python 버전은 `3.12`입니다.
 
 MediaPipe 포즈 추론용 모델 파일은 기본적으로 `models/mediapipe/` 아래를 찾습니다.
 다만 현재처럼 외부 폴더에 저장해 둔 경우에도 `POSE_MODEL_DIR` 환경 변수로 모델 디렉터리를 지정할 수 있습니다.
@@ -219,6 +220,14 @@ $env:POSE_NODE_WORKER_TIMEOUT_SECONDS="120"
 - `src/video/backSquat.mp4`
 
 즉, 현재 단계에서는 파일을 첨부하지 않아도 job 생성이 가능하고, 결과의 `skeleton.videoInfo.videoSrc`는 위 목업 비디오 경로를 가리킵니다.
+
+`POST /jobs`에서 현재 추가로 받을 수 있는 분석 입력은 아래와 같습니다.
+
+- `bodyweightKg`: 체중
+- `externalLoadKg`: 바벨 + 원판 등 외부 하중
+- `barPlacementMode`: `auto`, `high_bar`, `low_bar`
+
+분석 결과 `summary`, `groundRef`, `timeseries`에는 입력값과 함께 자동 해석 결과인 `barPlacementResolved`도 포함됩니다.
 
 ## benchmark 결과는 어디에서 보나요?
 
