@@ -1,2 +1,7 @@
 __pycache__/
 *.py[cod]
+
+# Environment variables — never commit real keys
+.env
+.env.*
+!.env.example
