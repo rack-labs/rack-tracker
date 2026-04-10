@@ -7,7 +7,7 @@ Use this structure to draft and maintain GitHub issues for `mpv v2`.
 
 ## Recommended Flow
 
-1. Start from `umbrella/mpv-v2-umbrella.md`.
+1. Start from `umbrella/mvp-v2-umbrella.md`.
 2. Add focused work items under `sub-issues/`.
 3. Include `Parent: #<issue-number>` in each sub-issue draft.
 4. Keep shared scope changes and cross-cutting decisions in the umbrella doc.
