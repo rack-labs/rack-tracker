@@ -144,13 +144,29 @@ Short context for the issue-sized work item.
 ## Done Criteria
 - Conditions that mark the issue complete
 
-## References
-- Related issue, docs, or links
+---
 
 ## Work Log
 
-## type: short summary (#<issue-number>)
+### type: short summary (#<issue-number>)
 
-Optional supporting headings may be added below when useful.
-Examples: `### Scope`, `### Changes`, `### Verification`, `### Notes`
+> One-line description of what changed and why
+
+#### Scope
+#### Changes
+#### Verification
+#### Notes
+
+---
+
+## Management Notes
+
+### Follow-up Candidates
+- Items deferred for later issues
+
+### Notes
+- Decisions, constraints, or risks worth preserving
+
+### References
+- Related issues, docs, or links
 ```
