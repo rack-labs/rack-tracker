@@ -14,7 +14,7 @@ It is a filtering document that answers one question first:
 ## 2. Scope
 
 This inventory is for the redesigned worker described in
-[cpp-worker-reset-plan.md](/C:/Users/neighbor/Documents/Code/Github/rack-tracker-forked/docs/mvp-v1/features/mediapipe/exploration/cpp-worker-reset-plan.md).
+[cpp-worker-reset-plan.md](/C:/Users/neighbor/Documents/Code/Github/rack-tracker-forked/docs/mvp-v1/features/mediapipe/exploration/cpp-worker/cpp-worker-reset-plan.md).
 
 Assumptions:
 
@@ -345,3 +345,4 @@ The current best candidate exclusions are:
 
 This inventory should be used as the input document for the first worker-owned
 GPU `BUILD.bazel` draft.
+

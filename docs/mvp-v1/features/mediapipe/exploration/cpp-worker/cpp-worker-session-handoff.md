@@ -67,7 +67,7 @@
 
 ### 설계 문서
 
-- [cpp-worker-design.md](C:\Users\neighbor\Documents\Code\Github\rack-tracker-forked\docs\features\mediapipe\cpp-worker-design.md)
+- [cpp-worker-design.md](/C:/Users/neighbor/Documents/Code/Github/rack-tracker-forked/docs/mvp-v1/features/mediapipe/exploration/cpp-worker/cpp-worker-design.md)
 
 ### Python 설정 및 통합
 
