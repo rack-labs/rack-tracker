@@ -31,6 +31,13 @@
 - Only pure question-answer turns with no file changes are exempt.
 - If the match or logging duty is unclear, read `docs/agent-workflow/documentation-rules.md` again before making changes.
 
+## Pre-Commit Review Gate
+
+- After completing a work unit, show the user a summary of changed files and request explicit approval before writing the management-document log or committing.
+- Write the log and commit only after the user approves.
+- Do not log or commit without explicit approval.
+- Commit immediately after each approved work unit. Do not accumulate changes across multiple work units and commit later.
+
 ## Core Rules
 
 - Read `## Recent Active Context` as a lightweight hint, not as a substitute for issue or management-document discovery.

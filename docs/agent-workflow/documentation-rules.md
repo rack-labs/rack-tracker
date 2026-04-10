@@ -40,7 +40,9 @@
 - Use one `##` section per commit-sized work unit.
 - Use the commit title as that section heading.
 - Lower headings and sub-structure inside a log section are optional. Use them only when they improve readability.
-- Update the log before or alongside the commit that represents that work unit.
+- After completing a work unit, show the user a summary of changed files and request explicit approval before writing the log or committing.
+- Write the log and commit only after the user approves. Do not log or commit without approval.
+- Commit immediately after each approved work unit. Do not accumulate changes across multiple work units and commit later.
 - If files changed without a matching management-document update, treat that as a workflow miss and correct it in the same work session.
 
 ## Fast Correction Loop
