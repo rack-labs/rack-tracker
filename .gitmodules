@@ -1,0 +1,4 @@
+[submodule "third_party/opencv/opencv-forked"]
+	path = third_party/opencv/opencv-forked
+	url = https://github.com/lhk0721/opencv-forked.git
+	branch = 4.x

@@ -1,0 +1,19 @@
+__pycache__/
+*.py[cod]
+
+# Environment variables — never commit real keys
+.env
+.env.*
+!.env.example
+
+# dataset
+171204_pose1/
+
+# videos
+poseLandmarker_Python/src/video/
+
+# temp files
+poseLandmarker_Python/tmp/
+
+# claude
+.claude/

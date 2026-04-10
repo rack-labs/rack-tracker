@@ -1,0 +1,87 @@
+{
+  "run": {
+    "benchmarkRunId": "benchmark_job_31bab43c",
+    "sourceVideoPath": "C:\\Users\\neighbor\\Documents\\Code\\Github\\rack-tracker-forked\\poseLandmarker_Python\\src\\video\\backSquat.mp4",
+    "videoFingerprint": "e59507e9b05cfe09",
+    "requestedDelegate": "GPU",
+    "actualDelegate": "CPU",
+    "delegateFallbackApplied": true,
+    "modelVariant": "full",
+    "runningMode": "VIDEO",
+    "frameCount": 320,
+    "sampleIntervalMs": 10.0,
+    "startedAt": "2026-03-19T14:35:57.218763+00:00",
+    "completedAt": "2026-03-19T14:36:07.871872+00:00"
+  },
+  "timingSummary": {
+    "frameExtractionMs": 508.706,
+    "rgbConversionMs": 171.979,
+    "inferenceMs": 7964.166,
+    "serializationMs": 50.882,
+    "analysisMs": 0.103,
+    "totalElapsedMs": 10653.101,
+    "stageStats": [
+      {
+        "key": "frame_extraction",
+        "label": "Frame Extraction",
+        "totalMs": 508.706,
+        "averageMs": null,
+        "medianMs": null,
+        "p95Ms": null,
+        "shareRatio": 0.0478
+      },
+      {
+        "key": "rgb_conversion",
+        "label": "RGB Conversion",
+        "totalMs": 171.979,
+        "averageMs": 0.537,
+        "medianMs": 0.496,
+        "p95Ms": 0.766,
+        "shareRatio": 0.0161
+      },
+      {
+        "key": "inference",
+        "label": "Inference",
+        "totalMs": 7964.166,
+        "averageMs": 24.888,
+        "medianMs": 23.337,
+        "p95Ms": 35.559,
+        "shareRatio": 0.7476
+      },
+      {
+        "key": "serialization",
+        "label": "Serialization",
+        "totalMs": 50.882,
+        "averageMs": 0.159,
+        "medianMs": 0.143,
+        "p95Ms": 0.252,
+        "shareRatio": 0.0048
+      },
+      {
+        "key": "analysis",
+        "label": "Analysis",
+        "totalMs": 0.103,
+        "averageMs": null,
+        "medianMs": null,
+        "p95Ms": null,
+        "shareRatio": 0.0
+      }
+    ]
+  },
+  "qualitySummary": {
+    "poseDetectedRatio": 1.0,
+    "detectedFrameCount": 320,
+    "avgVisibility": 0.9803,
+    "minVisibility": 0.8079,
+    "lowVisibilityFrameRatio": 0.0,
+    "consecutiveMissedPoseMax": 0,
+    "analysisSuccess": true
+  },
+  "comparisonTags": [
+    "model:full",
+    "delegate-requested:GPU",
+    "delegate-actual:CPU",
+    "sampling-ms:10.0",
+    "delegate:fallback"
+  ]
+}
