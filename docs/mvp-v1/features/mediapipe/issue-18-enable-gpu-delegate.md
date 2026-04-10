@@ -56,7 +56,7 @@
 - `poseLandmarker_Python/adapter/mediapipe_adapter.py`
 - `poseLandmarker_Python/service/pose_inference.py`
 - `poseLandmarker_Python/docs/optimization/performance-summary.md`
-- `docs/features/mediapipe/architecture.md`
+- `docs/mvp-v1/features/mediapipe/architecture.md`
 
 ## 2026-03-27 추가 진단 메모
 

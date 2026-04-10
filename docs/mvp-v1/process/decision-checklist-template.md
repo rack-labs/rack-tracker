@@ -14,8 +14,8 @@
 - 이 문서는 아키텍처 문서나 명세 문서를 읽고, 지금 확정이 필요한 결정만 압축해서 관리한다.
 - 각 항목은 `결정 내용`, `권장 결론`, `확인 필요`, `주석` 중심으로 짧고 명확하게 유지한다.
 - 사용자가 방향을 확정하면 AI가 해당 항목 제목의 열림/닫힘 마커와 상태판을 바로 갱신한다.
-- 문서 안에 `todo에 적어둘 것`, `todo에 반영`, `후속 단계 TODO`, `todo로 남길 것` 같은 지시가 나오면 AI는 별도 확인 없이 즉시 [docs/planning/todo.md](C:/Users/neighbor/Documents/Code/Github/rack-tracker-forked/docs/planning/todo.md)에 후속 작업 항목을 추가해야 한다.
-- `docs/planning/todo.md`에 반영한 뒤에는 이 체크리스트 문서에도 반영 완료 사실이 보이도록 주석 또는 상태를 갱신한다.
+- 문서 안에 `todo에 적어둘 것`, `todo에 반영`, `후속 단계 TODO`, `todo로 남길 것` 같은 지시가 나오면 AI는 별도 확인 없이 즉시 [docs/mvp-v1/planning/todo.md](C:/Users/neighbor/Documents/Code/Github/rack-tracker-forked/docs/mvp-v1/planning/todo.md)에 후속 작업 항목을 추가해야 한다.
+- `docs/mvp-v1/planning/todo.md`에 반영한 뒤에는 이 체크리스트 문서에도 반영 완료 사실이 보이도록 주석 또는 상태를 갱신한다.
 - 체크리스트가 모두 닫히고 후속 TODO 반영까지 끝났으면 이 문서는 완료된 기록으로 유지한다. 삭제하지 않는다.
 
 권장 작성 순서:
@@ -57,7 +57,7 @@
 
 - 사용자 확인이 필요한 결정 항목을 짧게 정리한다.
 - 각 항목의 확정 여부를 상태판에서 관리한다.
-- 확정된 내용은 이후 아키텍처 문서, 명세 문서, `docs/planning/todo.md` 반영의 기준으로 사용한다.
+- 확정된 내용은 이후 아키텍처 문서, 명세 문서, `docs/mvp-v1/planning/todo.md` 반영의 기준으로 사용한다.
 
 ## 상태판
 
@@ -74,9 +74,9 @@
 - 사용자가 방향을 확정한 항목은 AI가 해당 항목 제목 마커를 `닫힘`으로 바꾸고, 상태판도 함께 갱신한다.
 - 아직 사용자 확인이 필요한 항목만 `열림`으로 유지한다.
 - `최종 요약`은 열림 항목이 모두 닫힌 뒤 AI가 최종 결론으로 갱신하고 마감한다.
-- `docs/planning/todo.md`는 별도 후속 작업 관리 문서이며, 이 체크리스트와는 역할이 다르다.
+- `docs/mvp-v1/planning/todo.md`는 별도 후속 작업 관리 문서이며, 이 체크리스트와는 역할이 다르다.
 - 이 문서는 삭제 대상 임시 메모가 아니라, 결정 정리 양식으로 계속 유지한다.
-- 문서 안에서 TODO 반영 지시가 확인되면 AI는 같은 작업 단위에서 `docs/planning/todo.md`를 즉시 갱신해야 한다.
+- 문서 안에서 TODO 반영 지시가 확인되면 AI는 같은 작업 단위에서 `docs/mvp-v1/planning/todo.md`를 즉시 갱신해야 한다.
 
 답변 방식:
 
@@ -87,7 +87,7 @@
 - AI는 사용자 답변이 들어오면:
   - 항목 상태 갱신
   - `결론 요약` 보강
-  - 필요 시 `docs/planning/todo.md` 즉시 반영
+  - 필요 시 `docs/mvp-v1/planning/todo.md` 즉시 반영
   를 함께 처리한다.
 
 ## 1. {결정 항목명} [열림]
@@ -156,6 +156,6 @@
 
 TODO 반영 기록:
 
-- {`docs/planning/todo.md`에 추가한 항목 또는 `없음`}
+- {`docs/mvp-v1/planning/todo.md`에 추가한 항목 또는 `없음`}
 
 주석:

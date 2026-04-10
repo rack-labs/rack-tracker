@@ -1,23 +1,21 @@
 # Docs Index
 
-`docs` 디렉토리는 목적과 작업 단위 기준으로 아래처럼 나눈다.
+`docs/` is organized by product phase so v2 work does not drift back into v1 material.
 
-- `features/`: 기능별 명세, 아키텍처, 이슈 초안, 의사결정 문서
-- `process/`: 협업 규칙, 커밋/푸시 워크플로우
-- `planning/`: TODO, 후속 작업 관리
-- `product/`: UI, 제품 기획 문서
-- `data/`: 데이터 구조 해설, 샘플 데이터 문서
+## Top-Level Structure
 
-현재 주요 문서 위치:
+- `mvp-v1/`: archived MVP v1 specs, architecture, process docs, and supporting references
+- `mpv-v2/`: active MPV v2 planning and issue tracking
 
-- `features/mediapipe/spec.md`
-- `features/mediapipe/architecture.md`
-- `features/mediapipe/decision-checklist-phase-1-index-01.md`
-- `features/opencv/spec.md`
-- `features/opencv/architecture.md`
-- `process/git-collaboration-convention.md`
-- `process/codex-commit-and-push-workflow.md`
-- `process/decision-checklist-template.md`
-- `planning/todo.md`
-- `product/ui.md`
-- `data/metadata.md`
+## Recommended Entry Points
+
+- `mpv-v2/README.md`: start here for current planning
+- `mpv-v2/issues/README.md`: issue-writing workflow for v2
+- `mpv-v2/issues/umbrella/mpv-v2-umbrella.md`: umbrella issue draft
+- `mvp-v1/README.md`: legacy documentation index
+
+## Repository Cleanup Rule
+
+- New v2 planning documents go under `docs/mpv-v2/`.
+- Existing v1 references stay under `docs/mvp-v1/` unless they are being actively rewritten for v2.
+- When an older document is only historical context, keep it in `docs/mvp-v1/` and link to it instead of duplicating it.

@@ -4,7 +4,7 @@
 >
 > 이 문서를 수정하는 AI 또는 작성자는 반드시 아래 짝 문서를 함께 확인해야 한다.
 >
-> - `docs/features/opencv/spec.md`
+> - `docs/mvp-v1/features/opencv/spec.md`
 >
 > 규칙:
 >

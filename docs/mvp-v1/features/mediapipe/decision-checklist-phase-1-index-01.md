@@ -20,14 +20,14 @@
 - 초기 실패 처리 정책
 - 초기 구현 인터페이스 범위
 
-이 문서는 `docs/features/mediapipe/architecture.md` 기준으로,
+이 문서는 `docs/mvp-v1/features/mediapipe/architecture.md` 기준으로,
 지금 확정이 필요한 결정만 압축해서 관리하는 문서다.
 
 용도:
 
 - 사용자 확인이 필요한 결정 항목을 짧게 정리한다.
 - 각 항목의 확정 여부를 상태판에서 관리한다.
-- 확정된 내용은 이후 아키텍처 문서, 명세 문서, `docs/planning/todo.md` 반영의 기준으로 사용한다.
+- 확정된 내용은 이후 아키텍처 문서, 명세 문서, `docs/mvp-v1/planning/todo.md` 반영의 기준으로 사용한다.
 
 문서 명명 규칙:
 
@@ -56,7 +56,7 @@
 - 사용자가 방향을 확정한 항목은 AI가 해당 항목 상태를 `질문-주석 채널 닫힘`으로 바꾸고, 상태판도 함께 갱신한다.
 - 아직 사용자 확인이 필요한 항목만 `열림`으로 유지한다.
 - `6. 최종 요약`은 열림 항목이 모두 닫힌 뒤 AI가 최종 결론으로 갱신하고 마감한다.
-- `docs/planning/todo.md`는 별도 후속 작업 관리 문서이며, 이 체크리스트와는 역할이 다르다.
+- `docs/mvp-v1/planning/todo.md`는 별도 후속 작업 관리 문서이며, 이 체크리스트와는 역할이 다르다.
 - 이 문서는 삭제 대상 임시 메모가 아니라, 결정 정리 양식으로 계속 유지한다.
 
 답변 방식:
@@ -68,7 +68,7 @@
 - AI는 사용자 답변이 들어오면:
   - 항목 상태 갱신
   - `결론 요약` 보강
-  - 필요 시 `docs/planning/todo.md` 반영 포인트 표시
+  - 필요 시 `docs/mvp-v1/planning/todo.md` 반영 포인트 표시
   를 함께 처리한다.
 
 ## 1. MVP 범위
@@ -110,7 +110,7 @@
 - `world_landmarks`를 지금부터 스키마에 실사용 필드로 포함할지, 아니면 문서상 확장 후보로만 둘지?
 - `segmentation_mask`는 완전히 제외할지, 옵션만 남길지?
 
-주석: video 모드만 우선 지원하고, 현 단계에선 landmarks만 반환. `world_landmarks`, `segmentation_mask`, 다중 영상 3D 융합은 후속 단계로 보류. `docs/planning/todo.md`에 해당 후속 확장 옵션을 적어둘 것
+주석: video 모드만 우선 지원하고, 현 단계에선 landmarks만 반환. `world_landmarks`, `segmentation_mask`, 다중 영상 3D 융합은 후속 단계로 보류. `docs/mvp-v1/planning/todo.md`에 해당 후속 확장 옵션을 적어둘 것
 
 ## 2. 기본 실행 정책
 

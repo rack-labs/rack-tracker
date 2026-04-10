@@ -129,11 +129,11 @@ Reason:
 
 ### Design docs
 
-- [windows-gl-adapter-minimum-interface.md](/C:/Users/neighbor/Documents/Code/Github/rack-tracker-forked/docs/features/mediapipe/windows-gl-adapter-minimum-interface.md)
-- [windows-gl-mediapipe-shim-plan.md](/C:/Users/neighbor/Documents/Code/Github/rack-tracker-forked/docs/features/mediapipe/windows-gl-mediapipe-shim-plan.md)
-- [windows-gpu-resources-replacement-plan.md](/C:/Users/neighbor/Documents/Code/Github/rack-tracker-forked/docs/features/mediapipe/windows-gpu-resources-replacement-plan.md)
-- [windows-gl-helper-wiring-patch-plan.md](/C:/Users/neighbor/Documents/Code/Github/rack-tracker-forked/docs/features/mediapipe/windows-gl-helper-wiring-patch-plan.md)
-- [windows-gl-stage2-image-to-tensor-result.md](/C:/Users/neighbor/Documents/Code/Github/rack-tracker-forked/docs/features/mediapipe/windows-gl-stage2-image-to-tensor-result.md)
+- [windows-gl-adapter-minimum-interface.md](/C:/Users/neighbor/Documents/Code/Github/rack-tracker-forked/docs/mvp-v1/features/mediapipe/exploration/windows-gl-adapter-minimum-interface.md)
+- [windows-gl-mediapipe-shim-plan.md](/C:/Users/neighbor/Documents/Code/Github/rack-tracker-forked/docs/mvp-v1/features/mediapipe/exploration/windows-gl-mediapipe-shim-plan.md)
+- [windows-gpu-resources-replacement-plan.md](/C:/Users/neighbor/Documents/Code/Github/rack-tracker-forked/docs/mvp-v1/features/mediapipe/exploration/windows-gpu-resources-replacement-plan.md)
+- [windows-gl-helper-wiring-patch-plan.md](/C:/Users/neighbor/Documents/Code/Github/rack-tracker-forked/docs/mvp-v1/features/mediapipe/exploration/windows-gl-helper-wiring-patch-plan.md)
+- [windows-gl-stage2-image-to-tensor-result.md](/C:/Users/neighbor/Documents/Code/Github/rack-tracker-forked/docs/mvp-v1/features/mediapipe/exploration/windows-gl-stage2-image-to-tensor-result.md)
 
 ### Code skeletons
 

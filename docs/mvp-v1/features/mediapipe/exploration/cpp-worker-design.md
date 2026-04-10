@@ -9,7 +9,7 @@
 - 현재 FastAPI API 표면과 최종 결과 JSON shape를 유지한다.
 - OpenCV 기반 프레임 추출은 Python이 계속 담당하고, MediaPipe Pose 추론만 C++ 워커가 담당한다.
 
-이 문서는 초안이다. 현재 구현 설명은 여전히 `docs/features/mediapipe/architecture.md`와 `docs/features/mediapipe/spec.md`를 기준으로 본다.
+이 문서는 초안이다. 현재 구현 설명은 여전히 `docs/mvp-v1/features/mediapipe/architecture.md`와 `docs/mvp-v1/features/mediapipe/spec.md`를 기준으로 본다.
 
 ## 2. 현재 코드 기준 삽입 지점
 

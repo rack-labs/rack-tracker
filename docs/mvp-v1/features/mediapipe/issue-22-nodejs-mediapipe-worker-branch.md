@@ -5,7 +5,7 @@
 ## 작업 목적
 현재 `poseLandmarker_Python`는 FastAPI 기반 백엔드, OpenCV 기반 프레임 추출, MediaPipe Python 기반 포즈 추론, 스켈레톤/분석/benchmark 생성으로 구성되어 있다.
 
-하지만 `docs/features/mediapipe/issue-18-enable-gpu-delegate.md`에서 정리한 것처럼, WSL 환경에서 MediaPipe Python GPU delegate를 안정적으로 실사용 경로로 고정하는 데 한계가 확인됐다.
+하지만 `docs/mvp-v1/features/mediapipe/issue-18-enable-gpu-delegate.md`에서 정리한 것처럼, WSL 환경에서 MediaPipe Python GPU delegate를 안정적으로 실사용 경로로 고정하는 데 한계가 확인됐다.
 
 이 작업의 목적은 `poseLandmarker_Python`의 전체 서비스 구조와 API 표면은 최대한 유지하되, MediaPipe 추론부만 Node.js 런타임으로 분리하고 이를 `poseLandmarker_Python/node_worker/` 내부 subprocess 워커로 연결하는 방향을 기준안으로 정리하는 것이다.
 
@@ -457,9 +457,9 @@ class PoseInferenceService:
 - 이후 필요하면 같은 JSON 계약을 유지한 채 장기 실행 Node 서버형 또는 브라우저 없는 서버 런타임으로 옮길 수 있지만, 이번 단계의 목표는 아니다.
 
 ## 참고 자료
-- `docs/features/mediapipe/issue-18-enable-gpu-delegate.md`
-- `docs/features/mediapipe/architecture.md`
-- `docs/features/mediapipe/spec.md`
+- `docs/mvp-v1/features/mediapipe/issue-18-enable-gpu-delegate.md`
+- `docs/mvp-v1/features/mediapipe/architecture.md`
+- `docs/mvp-v1/features/mediapipe/spec.md`
 - `poseLandmarker_Python/adapter/mediapipe_adapter.py`
 - `poseLandmarker_Python/service/pose_inference.py`
 - `poseLandmarker_Python/service/job_manager.py`

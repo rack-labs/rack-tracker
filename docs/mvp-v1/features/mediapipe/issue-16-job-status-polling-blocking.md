@@ -19,8 +19,8 @@
 
 ## 참고 자료
 - `poseLandmarker_Python/service/job_manager.py`
-- `docs/features/mediapipe/spec.md`
-- `docs/features/mediapipe/architecture.md`
+- `docs/mvp-v1/features/mediapipe/spec.md`
+- `docs/mvp-v1/features/mediapipe/architecture.md`
 
 fix: MediaPipe 백엔드 job status polling 응답 지연 수정 (#11)
 
@@ -41,8 +41,8 @@ Closes #11
 ## 변경 사항 상세
 - `poseLandmarker_Python/service/job_manager.py`에서 `PoseInferenceService.run()` 호출을 `asyncio.to_thread()`로 감쌌다.
 - `poseLandmarker_Python/service/job_manager.py`에서 `SkeletonMapperService.map_landmarks()`, `AnalysisPipelineService.analyze()`, `BenchmarkService.build_result()`, `LlmFeedbackService.generate()` 호출도 동일하게 스레드 오프로딩으로 변경했다.
-- `docs/features/mediapipe/architecture.md`에 background job의 CPU 바운드 단계는 이벤트 루프 밖에서 실행해야 한다는 원칙과 polling 응답성 관련 권고를 추가했다.
-- `docs/features/mediapipe/spec.md`에 status polling과 무거운 분석 단계 분리 원칙을 성능 관점 설명에 반영했다.
+- `docs/mvp-v1/features/mediapipe/architecture.md`에 background job의 CPU 바운드 단계는 이벤트 루프 밖에서 실행해야 한다는 원칙과 polling 응답성 관련 권고를 추가했다.
+- `docs/mvp-v1/features/mediapipe/spec.md`에 status polling과 무거운 분석 단계 분리 원칙을 성능 관점 설명에 반영했다.
 
 ## 테스트 방법
 1. 백엔드 서버를 실행한다.

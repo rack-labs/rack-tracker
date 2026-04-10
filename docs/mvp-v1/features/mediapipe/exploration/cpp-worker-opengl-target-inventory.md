@@ -14,7 +14,7 @@ It is a filtering document that answers one question first:
 ## 2. Scope
 
 This inventory is for the redesigned worker described in
-[cpp-worker-reset-plan.md](/C:/Users/neighbor/Documents/Code/Github/rack-tracker-forked/docs/features/mediapipe/cpp-worker-reset-plan.md).
+[cpp-worker-reset-plan.md](/C:/Users/neighbor/Documents/Code/Github/rack-tracker-forked/docs/mvp-v1/features/mediapipe/exploration/cpp-worker-reset-plan.md).
 
 Assumptions:
 
