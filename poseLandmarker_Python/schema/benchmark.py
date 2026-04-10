@@ -18,6 +18,7 @@ class BenchmarkRunMetadata(BaseModel):
     sourceVideoPath: str
     videoFingerprint: str
     sourceVideoFps: float
+    inferenceBackend: str
     requestedSamplingFps: float | None = None
     effectiveSamplingFps: float
     requestedDelegate: str
@@ -38,6 +39,7 @@ class BenchmarkTimingSummary(BaseModel):
     inferenceMs: float
     serializationMs: float
     analysisMs: float
+    llmFeedbackMs: float | None = None
     totalElapsedMs: float
     stageStats: list[BenchmarkStageStats] = Field(default_factory=list)
 
@@ -70,10 +72,34 @@ class BenchmarkStorageRefs(BaseModel):
     frameMetricsPath: str
 
 
+class BenchmarkLlmPromptDiagnostics(BaseModel):
+    schemaVersion: str
+    source: str
+    originalAnalysisChars: int
+    originalAnalysisApproxTokens: int
+    payloadChars: int
+    payloadApproxTokens: int
+    savedChars: int
+    savedApproxTokens: int
+    reductionRatio: float
+    topLevelKeys: list[str] = Field(default_factory=list)
+
+
+class BenchmarkLlmCallResult(BaseModel):
+    enabled: bool
+    model: str
+    fallbackApplied: bool
+    inputTokens: int
+    outputTokens: int
+    latencyMs: float
+
+
 class BenchmarkResult(BaseModel):
     run: BenchmarkRunMetadata
     timingSummary: BenchmarkTimingSummary
     qualitySummary: BenchmarkQualitySummary
     comparisonTags: list[str] = Field(default_factory=list)
     frameMetrics: list[BenchmarkFrameMetric] = Field(default_factory=list)
+    llmPromptDiagnostics: BenchmarkLlmPromptDiagnostics | None = None
+    llmCallResult: BenchmarkLlmCallResult | None = None
     storage: BenchmarkStorageRefs | None = None

@@ -6,6 +6,7 @@ class JobProgress(BaseModel):
     currentStep: int
     totalSteps: int
     ratio: float
+    stageDurationsMs: dict[str, float] = {}
 
 
 class JobError(BaseModel):

@@ -128,17 +128,31 @@ class AnalysisPipelineService:
 
 - `GET /jobs/{job_id}/result`
 
-이 응답 구조는 [`result.py`](C:/Users/neighbor/Documents/Code/Github/rack-tracker-forked/poseLandmarker_Python/schema/result.py) 의 `MotionAnalysisResult`를 따른다.
+이 응답 구조는 [`result.py`](C:/Users/neighbor/Documents/Code/Github/rack-tracker-forked/poseLandmarker_Python/schema/result.py) 의 `MotionAnalysisSummary`를 따른다.
 
 ```python
-class MotionAnalysisResult(BaseModel):
-    skeleton: dict
-    analysis: dict
-    llmFeedback: dict
-    benchmark: dict
+class MotionAnalysisSummary(BaseModel):
+    skeleton: dict[str, Any]
+    analysis: AnalysisResult
+    llmFeedback: LlmFeedbackResult
+    benchmark: dict[str, Any]
 ```
 
-즉, 프론트엔드나 다른 소비자가 보게 되는 분석 결과 출구는 `MotionAnalysisResult.analysis`다.
+`analysis`는 다시 아래 typed block으로 나뉜다.
+
+```python
+class AnalysisResult(BaseModel):
+    summary: AnalysisSummary
+    bodyProfile: BodyProfileResult
+    groundRef: GroundRefResult
+    kpis: list[KPIResult]
+    timeseries: TimeseriesResult
+    repSegments: list[RepSegmentResult]
+    events: list[EventResult]
+    issues: list[IssueResult]
+```
+
+즉, 프론트엔드나 다른 소비자가 보게 되는 분석 결과 출구는 여전히 `analysis`지만, 이제는 `dict`가 아니라 typed schema를 기준으로 소비한다.
 
 ## 5. 분석 입력 데이터는 어디서 만들어지는가
 
@@ -497,7 +511,7 @@ MediaPipe 관련 코드는 `adapter/`, `pose_inference.py` 쪽에 있고, 분석
 
 ## 14. 지금 기준 결론
 
-현재 프로젝트에서 데이터분석 파이프라인의 공식 입구는 `AnalysisPipelineService.analyze()`이고, 공식 입력은 `skeleton` JSON이며, 공식 출구는 `MotionAnalysisResult.analysis`다.
+현재 프로젝트에서 데이터분석 파이프라인의 공식 입구는 `AnalysisPipelineService.analyze()`이고, 공식 입력은 `skeleton` JSON이며, 공식 출구는 `MotionAnalysisSummary.analysis`다.
 
 따라서 팀원에게 맡길 작업의 중심 파일은 `service/analysis_pipeline.py`이고, 코드가 커질 경우 `service/analysis_*.py` 계열로 분리하는 방식이 가장 자연스럽다.
 

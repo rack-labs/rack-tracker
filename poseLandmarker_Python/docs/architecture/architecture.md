@@ -513,6 +513,9 @@ job 상태는 아래 단계로 관리한다.
   - `video`: 업로드 파일
   - `fps`: 목표 FPS
   - `exerciseType`: 운동 종류 식별자, 예: `squat`
+  - `bodyweightKg`: 선택 입력 체중
+  - `externalLoadKg`: 선택 입력 외부 하중
+  - `barPlacementMode`: `auto`, `high_bar`, `low_bar`
 
 응답 예시:
 

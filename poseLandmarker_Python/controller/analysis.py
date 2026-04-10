@@ -13,24 +13,24 @@ from config import (
     MOCK_VIDEO_PATH,
     UPLOAD_DIR,
 )
-from schema.job import JobCreateResponse, JobStatusResponse
+from schema.result import MotionAnalysisSummary
 from service.job_manager import job_manager
 
-router = APIRouter(prefix="/jobs", tags=["jobs"])
+router = APIRouter(prefix="/analysis", tags=["analysis"])
 EMPTY_FORM_SCHEMA = {"example": ""}
 
 
 @router.post(
-    "",
-    response_model=JobCreateResponse,
-    summary="Create Analysis Job",
+    "/preview",
+    response_model=MotionAnalysisSummary,
+    summary="Run Analysis Preview",
     description=(
-        "Queues a background job that runs frame extraction, pose inference, and the data-analysis "
-        "pipeline. Poll `/jobs/{job_id}` for status and read `/jobs/{job_id}/result` for the final "
-        "analysis payload."
+        "Runs the full data-analysis pipeline immediately and returns the final analysis payload "
+        "without creating a background job. If no video file is uploaded, the built-in sample "
+        "video is used."
     ),
 )
-async def create_job(
+async def preview_analysis(
     video: UploadFile | None = File(default=None),
     fps: float | None = Form(default=None, json_schema_extra=EMPTY_FORM_SCHEMA),
     samplingFps: float | None = Form(default=None, json_schema_extra=EMPTY_FORM_SCHEMA),
@@ -41,7 +41,7 @@ async def create_job(
     modelAssetPath: str | None = Form(default=None, json_schema_extra=EMPTY_FORM_SCHEMA),
     modelVariant: str | None = Form(default=None, json_schema_extra=EMPTY_FORM_SCHEMA),
     delegate: str | None = Form(default=None, json_schema_extra=EMPTY_FORM_SCHEMA),
-) -> JobCreateResponse:
+) -> MotionAnalysisSummary:
     source_path = str(MOCK_VIDEO_PATH)
     source_name = MOCK_VIDEO_PATH.name
     uses_mock_video = True
@@ -58,7 +58,7 @@ async def create_job(
             externalLoadKg if externalLoadKg is not None else MOCK_VIDEO_EXTERNAL_LOAD_KG
         )
 
-    return await job_manager.create_job(
+    return await job_manager.preview(
         filename=source_name,
         source_path=source_path,
         requested_sampling_fps=samplingFps if samplingFps is not None else fps,
@@ -70,11 +70,6 @@ async def create_job(
         model_variant=modelVariant,
         delegate=delegate,
     )
-
-
-@router.get("/{job_id}", response_model=JobStatusResponse)
-def get_job_status(job_id: str) -> JobStatusResponse:
-    return job_manager.get_status(job_id)
 
 
 async def _persist_upload(video: UploadFile) -> str:

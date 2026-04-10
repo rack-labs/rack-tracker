@@ -16,9 +16,10 @@
 ## 실행 전에 알아둘 점
 
 이 프로젝트는 `uv`로 Python 패키지를 관리하고 앱을 실행합니다.
+권장 Python 버전은 `3.12`입니다.
 
-MediaPipe 포즈 추론용 기본 모델 파일 `models/mediapipe/pose_landmarker_full.task`는 현재 저장소에 포함되어 있습니다.
-즉, 기본 설정 기준으로는 별도 모델 다운로드 없이 바로 실행할 수 있습니다.
+MediaPipe 포즈 추론용 모델 파일은 기본적으로 `models/mediapipe/` 아래를 찾습니다.
+다만 현재처럼 외부 폴더에 저장해 둔 경우에도 `POSE_MODEL_DIR` 환경 변수로 모델 디렉터리를 지정할 수 있습니다.
 
 `uv`를 사용한다면 보통 Python 가상환경을 직접 켤 필요는 없습니다.
 `uv sync`, `uv run ...` 같은 명령을 실행할 때 `uv`가 필요한 환경을 알아서 맞춰줍니다.
@@ -119,6 +120,14 @@ uv sync
 uv run main.py
 ```
 
+외부 모델 디렉터리를 쓰는 경우 예시는 아래와 같습니다.
+
+```powershell
+$env:POSE_MODEL_DIR="C:\Users\neighbor\Documents\Code\Github\pose_landmarker_models"
+cd C:\Users\neighbor\Documents\Code\Github\rack-tracker-forked\poseLandmarker_Python
+uv run main.py
+```
+
 이미 한 번 설치가 끝났고 환경이 바뀌지 않았다면 아래처럼 실행해도 됩니다.
 
 ```powershell
@@ -172,6 +181,38 @@ Motion Analysis Backend is running.
 - `GET /jobs/{job_id}/benchmark` : benchmark summary를 가져오는 API
 - `GET /jobs/{job_id}/benchmark/frames` : frame-level benchmark 상세를 가져오는 API
 
+## Node 워커 추론 경로
+
+기본값은 기존 Python MediaPipe 경로입니다.
+
+Node subprocess 워커를 실험하려면 추가 준비가 필요합니다.
+
+```powershell
+cd C:\Users\neighbor\Documents\Code\Github\rack-tracker-forked\poseLandmarker_Python\node_worker
+npm install
+```
+
+그 다음 백엔드 실행 전에 아래 환경 변수를 설정합니다.
+
+```powershell
+$env:POSE_NODE_WORKER_ENABLED="true"
+$env:POSE_NODE_WORKER_TIMEOUT_SECONDS="120"
+```
+
+매번 직접 입력하기 번거로우면 프로젝트 루트에서 아래 스크립트로 실행할 수 있습니다.
+
+```powershell
+.\run-node-worker.ps1
+```
+
+이 스크립트는 현재 PowerShell 세션에 Node worker 관련 환경 변수를 설정한 뒤 `uv run main.py`를 실행합니다.
+
+주의:
+
+- Node 워커는 Python이 저장한 frame image path를 읽습니다.
+- 현재 smoke test에서는 `@mediapipe/tasks-vision` 초기화가 `document is not defined`로 실패했습니다.
+- 즉, 경계와 워커 골격은 들어갔지만 실제 Node 추론 런타임은 추가 검증이 더 필요합니다.
+
 ## 현재 목업 비디오 동작
 
 백엔드와 프론트엔드 연결이 완료되기 전까지는 `POST /jobs`가 실제 업로드 파일 대신 아래 목업 비디오를 내부 소스로 사용합니다.
@@ -179,6 +220,14 @@ Motion Analysis Backend is running.
 - `src/video/backSquat.mp4`
 
 즉, 현재 단계에서는 파일을 첨부하지 않아도 job 생성이 가능하고, 결과의 `skeleton.videoInfo.videoSrc`는 위 목업 비디오 경로를 가리킵니다.
+
+`POST /jobs`에서 현재 추가로 받을 수 있는 분석 입력은 아래와 같습니다.
+
+- `bodyweightKg`: 체중
+- `externalLoadKg`: 바벨 + 원판 등 외부 하중
+- `barPlacementMode`: `auto`, `high_bar`, `low_bar`
+
+분석 결과 `summary`, `groundRef`, `timeseries`에는 입력값과 함께 자동 해석 결과인 `barPlacementResolved`도 포함됩니다.
 
 ## benchmark 결과는 어디에서 보나요?
 

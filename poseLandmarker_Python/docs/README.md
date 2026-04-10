@@ -12,6 +12,7 @@
 - `testing.md`
 - `architecture/architecture.md`
 - `architecture/data-analysis-pipeline-guide.md`
+- `architecture/analysis-pipeline-design.md`
 - `optimization/performance-summary.md`
 - `optimization/archive/2026-03-19-benchmark_job_31bab43c.md`
 - `reference/mediapipe/pose-landmarker-guide.md`
