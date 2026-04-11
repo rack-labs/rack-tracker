@@ -134,6 +134,7 @@ type: short summary (#<issue-number>)
 | ci | CI configuration change |
 | chore | Maintenance work |
 | revert | Revert of a prior commit |
+| repo | Repository structure changes (archiving, moving, removing directories or submodules) |
 
 ## Pull Request Rules
 
