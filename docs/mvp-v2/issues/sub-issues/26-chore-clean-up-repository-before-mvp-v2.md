@@ -1,5 +1,5 @@
 # [chore] MVP v2 전환 전 저장소 정리
-Parent: #<mvp-v2-umbrella-issue-number>
+Parent: #25
 
 ## 문서 관계
 
