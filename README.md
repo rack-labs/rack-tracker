@@ -10,7 +10,7 @@
 
 | 프로필 | 이름 | 담당 영역 | 핵심 책임 | 주요 개발 산출물 |
 | :---: | :--- | :--- | :--- | :--- |
-| <img src="https://github.com/lhk0721.png" width="100" height="100" style="object-fit: cover; border-radius: 50%;"> | **이&nbsp;현 &nbsp;규** | Core / AI | 프로젝트 리드, 포즈 추정 파이프라인 설계 및 구현, 협업 시스템 구축 | PoseLandmarker 통합, 랙 추적 알고리즘, 문서 체계 수립 |
+| <img src="https://github.com/lhk0721.png" width="100" height="100" style="object-fit: cover; border-radius: 50%;"> | **이&nbsp;현&nbsp;규** | Core / AI | 프로젝트 리드, 포즈 추정 파이프라인 설계 및 구현, 협업 시스템 구축 | PoseLandmarker 통합, 랙 추적 알고리즘, 문서 체계 수립 |
 | — | **이&nbsp;지&nbsp;원** | | | |
 | — | **장&nbsp;효&nbsp;인** | | | |
 | — | **전&nbsp;효&nbsp;원** | | | |
