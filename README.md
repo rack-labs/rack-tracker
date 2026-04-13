@@ -320,132 +320,176 @@ graph TD
 
 > `poseLandmarker_Python/` — FastAPI 기반 동작 분석 백엔드
 
-```mermaid
-flowchart TD
-    Client(["클라이언트 (Frontend / API)"])
+<div align="center">
+  <img src="docs/etc/architecture-slides/motion-analysis-backend-blueprint/image2.png" width="80%" alt="통합 분석 파이프라인 개요">
+  <p><em>비디오 업로드 → 스켈레톤 추출 → 운동역학 분석 → LLM 피드백</em></p>
+</div>
 
-    subgraph FastAPI ["⚡ FastAPI (uv)"]
-        direction TB
-        Router_A["POST /analysis/preview\n동기 분석 실행"]
-        Router_J["POST /jobs\n비동기 잡 생성"]
-        Router_JS["GET /jobs/{job_id}\n잡 상태 폴링"]
-        Router_R["GET /jobs/{job_id}/result\n결과 조회"]
-        JobMgr["JobManager\n파이프라인 오케스트레이션"]
-    end
+<div align="center">
+  <img src="docs/etc/architecture-slides/motion-analysis-backend-blueprint/image14.png" width="80%" alt="Master Blueprint: 데이터 흐름과 아키텍처, 역할의 통합">
+  <p><em>Master Blueprint — 데이터 흐름과 아키텍처, 역할의 통합</em></p>
+</div>
 
-    subgraph OpenCV ["📹 OpenCV"]
-        direction TB
-        OcvAdapter["OpenCvAdapter\nVideoCapture 래퍼"]
-        VideoReader["VideoReaderService\n프레임 샘플링 (target_fps)"]
-    end
+---
 
-    subgraph MediaPipe ["🦴 MediaPipe"]
-        direction TB
-        MpAdapter["MediaPipeAdapter\nPoseLandmarker 래퍼\n(CPU / GPU delegate)"]
-        PoseInfer["PoseInferenceService\n33개 랜드마크 추출\n& 직렬화"]
-        SkeletonMapper["SkeletonMapperService\n랜드마크 → Skeleton JSON"]
-    end
+## 6-Layer 아키텍처 스택
 
-    subgraph Pipeline ["📊 데이터 분석 파이프라인"]
-        direction TB
-        Preprocess["analysis_preprocess\n프레임 정제 & 필터링"]
-        BodyProfile["analysis_body_profile\n신체 프로필 추정\n(limb ratio, height)"]
-        COP["analysis_cop\n촬영 시점 감지\n& 무게중심(CoP) 산출"]
-        Features["analysis_features\n관절 각도 / 바 궤적\n시계열 특징 추출"]
-        Reps["analysis_reps\n렙 구간 감지\n(descent / ascent)"]
-        KPIs["analysis_kpis\nKPI 계산\n(ROM, bar_path_deviation 등)"]
-        Thresholds["analysis_thresholds\n개인화 임계값 산출"]
-        Events["analysis_events\n이벤트 감지\n(descent_start 등)"]
-        Issues["analysis_issues\n자세 이슈 감지\n(knee_cave, forward_lean 등)"]
-        Viz["analysis_visualization\n시각화 데이터 생성"]
-        LLM["llm_feedback\nClaude API\n코치 피드백 생성"]
-    end
+<div align="center">
+  <img src="docs/etc/architecture-slides/motion-analysis-backend-blueprint/image7.png" width="80%" alt="6-Layer 백엔드 아키텍처 스택">
+</div>
 
-    Client --> Router_A & Router_J & Router_JS & Router_R
-    Router_A & Router_J --> JobMgr
-    JobMgr --> VideoReader --> OcvAdapter
-    JobMgr --> PoseInfer --> MpAdapter
-    PoseInfer --> SkeletonMapper
-    JobMgr --> Preprocess
-    Preprocess --> BodyProfile --> COP --> Features
-    Features --> Reps --> KPIs --> Thresholds
-    KPIs --> Events
-    KPIs & Thresholds --> Issues
-    Issues --> Viz
-    Issues --> LLM
-
-    style FastAPI fill:#1e1e2e,stroke:#89b4fa,color:#cdd6f4,stroke-width:2px
-    style OpenCV fill:#1e2e1e,stroke:#a6e3a1,color:#cdd6f4,stroke-width:2px
-    style MediaPipe fill:#2e1e2e,stroke:#cba6f7,color:#cdd6f4,stroke-width:2px
-    style Pipeline fill:#2e2e1e,stroke:#f9e2af,color:#cdd6f4,stroke-width:2px
-    style Client fill:#313244,stroke:#89dceb,color:#cdd6f4,stroke-width:2px
-```
+| Layer | 경로 | 역할 |
+| --- | --- | --- |
+| **Entry Layer** | `main.py` | uvicorn 서버 진입점 |
+| **FastAPI Layer** | `app.py` | FastAPI 앱, CORS / GZip 미들웨어 |
+| **API Layer** | `controller/` | 라우터, HTTP 엔드포인트, 요청 파싱 |
+| **Service Layer** | `service/` | 핵심 비즈니스 로직, 파이프라인 오케스트레이션 |
+| **Adapter Layer** | `adapter/` | 외부 라이브러리(OpenCV, MediaPipe) 격리 |
+| **Schema Layer** | `schema/` | Pydantic 데이터 모델, 직렬화/역직렬화 |
 
 ---
 
 ## uv / FastAPI
 
-> 패키지 관리(uv) + REST API 서버
+> uv 패키지 관리 + REST API 서버
+
+<div align="center">
+  <img src="docs/etc/architecture-slides/motion-analysis-backend-blueprint/image3.png" width="80%" alt="단 두 줄 명령어로 완성되는 로컬 실행 환경">
+  <p><em><code>uv sync</code> → <code>uv run main.py</code> — 두 명령어로 로컬 서버 실행</em></p>
+</div>
+
+### 비동기 Job 파이프라인
+
+영상 처리는 단일 요청-응답으로 완료할 수 없어 비동기 Job 구조를 사용합니다.
+
+<div align="center">
+  <img src="docs/etc/architecture-slides/motion-analysis-backend-blueprint/image4.png" width="80%" alt="무거운 비디오 처리를 위한 비동기 파이프라인">
+</div>
+
+### Job State Machine
+
+<div align="center">
+  <img src="docs/etc/architecture-slides/motion-analysis-backend-blueprint/image5.png" width="80%" alt="Job 상태 관리 모델">
+</div>
 
 ```mermaid
 flowchart LR
-    subgraph Entry ["진입점"]
-        Main["main.py\nuvicorn 실행"]
-        AppPy["app.py\nFastAPI 앱 초기화\nCORS / GZip 미들웨어"]
-    end
+    Q([queued]) --> E([extracting]) --> A([analyzing]) --> G([generating_feedback]) --> C([completed])
+    E & A & G --> F([failed])
 
-    subgraph Routers ["controller/"]
-        R1["analysis.py\nPOST /analysis/preview"]
-        R2["jobs.py\nPOST /jobs\nGET /jobs/{id}"]
-        R3["results.py\nGET /jobs/{id}/result"]
-        R4["health.py\nGET /health"]
-    end
-
-    subgraph Schema ["schema/ (Pydantic)"]
-        S1["frame.py\nExtractedFrame\nFrameExtractionOptions"]
-        S2["pose.py\nPoseInferenceOptions\nPoseLandmarkPoint"]
-        S3["job.py\nJobCreateResponse\nJobStatusResponse"]
-        S4["result.py\nMotionAnalysisResult\nMotionAnalysisSummary"]
-    end
-
-    Main --> AppPy --> Routers
-    Routers --> Schema
+    style Q fill:#313244,stroke:#89b4fa,color:#cdd6f4
+    style E fill:#313244,stroke:#a6e3a1,color:#cdd6f4
+    style A fill:#313244,stroke:#f9e2af,color:#cdd6f4
+    style G fill:#313244,stroke:#fab387,color:#cdd6f4
+    style C fill:#1e3a1e,stroke:#a6e3a1,color:#cdd6f4
+    style F fill:#3a1e1e,stroke:#f38ba8,color:#cdd6f4
 ```
 
-| 파일 | 역할 |
+### 프론트엔드-백엔드 Polling 통신 규약
+
+<div align="center">
+  <img src="docs/etc/architecture-slides/motion-analysis-backend-blueprint/image6.png" width="80%" alt="프론트엔드-백엔드 간 비동기 Polling 통신 규약">
+</div>
+
+| 엔드포인트 | 설명 |
 | --- | --- |
-| `main.py` | uvicorn 서버 진입점 |
-| `app.py` | FastAPI 앱, CORS / GZip 미들웨어 등록 |
-| `controller/analysis.py` | `POST /analysis/preview` — 동기 분석 실행 |
-| `controller/jobs.py` | `POST /jobs` — 비동기 잡 생성, `GET /jobs/{id}` — 상태 폴링 |
-| `controller/results.py` | `GET /jobs/{id}/result` — 최종 결과 조회 |
-| `service/job_manager.py` | 전체 파이프라인 오케스트레이션 |
-| `schema/` | Pydantic 요청/응답 모델 |
-| `pyproject.toml` | uv 의존성 관리 (`fastapi`, `uvicorn`, `pydantic` 등) |
+| `POST /jobs` | 영상 업로드 → job_id 즉시 반환 |
+| `GET /jobs/{job_id}` | 상태 폴링 (반복 루프) → 진행 상태 및 현재 단계 반환 |
+| `GET /jobs/{job_id}/result` | 최종 결과 JSON 반환 |
+| `POST /analysis/preview` | 동기 즉시 분석 (업로드 없이 샘플 영상 사용) |
+
+### Service Layer 오케스트레이션
+
+<div align="center">
+  <img src="docs/etc/architecture-slides/motion-analysis-backend-blueprint/image8.png" width="80%" alt="Service Layer: 코어 비즈니스 로직의 오케스트레이션">
+</div>
+
+`service/job_manager.py`가 Orchestrator로서 전체 5단계 파이프라인을 순차 실행합니다.
+
+| Step | 서비스 | 역할 |
+| --- | --- | --- |
+| 1 | `video_reader.py` | OpenCV 프레임 추출 |
+| 2 | `pose_inference.py` + `mediapipe_adapter.py` | MediaPipe 포즈 추론 |
+| 3 | `skeleton_mapper.py` | 스켈레톤 JSON 변환 |
+| 4 | `analysis_pipeline.py` | 운동역학 분석 전체 실행 |
+| 5 | `llm_feedback.py` | LLM 피드백 생성 |
+
+### 3분할 데이터 계약
+
+<div align="center">
+  <img src="docs/etc/architecture-slides/motion-analysis-backend-blueprint/image10.png" width="80%" alt="프론트엔드 UI를 지배하는 3분할 데이터 계약">
+</div>
+
+`schema/result.py`의 응답 구조는 세 블록으로 구성됩니다.
+
+```
+{
+  "skeleton": { ... },    // 비디오 오버레이 UI용 프레임별 랜드마크
+  "analysis": { ... },    // 대시보드 시각화 차트용 KPI · repSegments · issues
+  "llmFeedback": { ... }  // 코칭 텍스트 패널 (overallComment, highlights, corrections, coachCue)
+}
+```
 
 ---
 
 ## OpenCV
 
-> 비디오 프레임 추출 레이어
+> 비디오 프레임 추출 레이어 — 영상 분석 공정의 첫 번째 관문
 
-```mermaid
-flowchart LR
-    VideoFile["동영상 파일\n(.mp4 등)"]
+<div align="center">
+  <img src="docs/etc/architecture-slides/opencv-frame-extraction-blueprint/image2.png" width="80%" alt="영상 분석 공정의 첫 번째 관문">
+</div>
 
-    subgraph CV ["adapter/ + service/"]
-        OcvAdapter["OpenCvAdapter\ncv2.VideoCapture 래퍼\n메타데이터 읽기 / 프레임 순회"]
-        VideoReader["VideoReaderService\n샘플링 모드 결정\n(target_fps / all_frames)\n타임스탬프 계산"]
-        ExtractedFrame["ExtractedFrame\nindex / timestamp_ms / image(ndarray)"]
-    end
+### 3가지 핵심 설계 원칙
 
-    VideoFile --> OcvAdapter --> VideoReader --> ExtractedFrame
-```
+<div align="center">
+  <img src="docs/etc/architecture-slides/opencv-frame-extraction-blueprint/image3.png" width="80%" alt="확장을 고려한 3가지 핵심 설계 원칙">
+</div>
 
-| 파일 | 역할 |
+| 원칙 | 설명 |
 | --- | --- |
-| `adapter/opencv_adapter.py` | `cv2.VideoCapture` 래퍼, fps / 해상도 / 프레임 수 메타데이터 제공 |
-| `service/video_reader.py` | 샘플링 모드(`target_fps` / `all_frames`)에 따른 프레임 필터링 및 `ExtractedFrame` 생성 |
+| **격리 (Isolation)** | `OpenCvAdapter`로 외부 라이브러리를 Service 계층과 분리 |
+| **효율 (Efficiency)** | Iterator(Generator) 기반 지연 처리로 메모리 부담 최소화 |
+| **지연 (Lazy Execution)** | 프레임을 실제 소비 시점까지 디코딩 지연 |
+
+### 책임 분리 구조
+
+<div align="center">
+  <img src="docs/etc/architecture-slides/opencv-frame-extraction-blueprint/image4.png" width="80%" alt="책임의 철저한 분리">
+</div>
+
+### 형태 변환 흐름
+
+<div align="center">
+  <img src="docs/etc/architecture-slides/opencv-frame-extraction-blueprint/image6.png" width="80%" alt="형태의 변환: 파일에서 분석 가능한 객체로">
+</div>
+
+`File Path` → `cv2.VideoCapture` → `np.ndarray` → `ExtractedFrame`
+
+### 샘플링 전략 (Sampling Strategies)
+
+<div align="center">
+  <img src="docs/etc/architecture-slides/opencv-frame-extraction-blueprint/image7.png" width="80%" alt="속도를 지배하는 샘플 제어">
+</div>
+
+| 모드 | 설명 |
+| --- | --- |
+| `all` | 모든 프레임 발행 |
+| `every_n_frames` | N번째 프레임마다 추출 |
+| `target_fps` | 목표 FPS 기반 균등 샘플링 |
+| `time_range` | 특정 시간 구간 내 프레임만 추출 |
+
+### 입출력 스키마
+
+<div align="center">
+  <img src="docs/etc/architecture-slides/opencv-frame-extraction-blueprint/image9.png" width="80%" alt="입출력 스키마 규격">
+</div>
+
+| 모델 | 주요 필드 |
+| --- | --- |
+| `FrameExtractionOptions` | `sampling_mode`, `target_fps`, `convert_bgr_to_rgb`, `save_images` |
+| `ExtractedFrame` | `frame_index`, `timestamp_ms`, `image (np.ndarray)`, `saved_path` |
+| `FrameExtractionResult` | `total_frames_in_source`, `extracted_frame_count`, `status_code` |
 
 ---
 
@@ -453,54 +497,91 @@ flowchart LR
 
 > 포즈 추정(Pose Estimation) 레이어
 
-```mermaid
-flowchart LR
-    Frames["ExtractedFrame 리스트\n(numpy ndarray)"]
+<div align="center">
+  <img src="docs/etc/architecture-slides/mediapipe-pose-blueprint/image2.png" width="80%" alt="백엔드 조립 라인에서의 위치">
+  <p><em>video_reader.py (Input) → pose_inference.py (Core) → skeleton_mapper.py (Output)</em></p>
+</div>
 
-    subgraph MP ["adapter/ + service/"]
-        MpAdapter["MediaPipeAdapter\nPoseLandmarker 초기화\nCPU / GPU delegate 자동 선택\nmp.Image 변환"]
-        PoseInfer["PoseInferenceService\n프레임별 추론 실행\n33개 랜드마크 (x, y, z, visibility)\n벤치마크 계측"]
-        SkeletonMapper["SkeletonMapperService\nPoseFrameResult →\nSkeleton JSON 변환"]
-    end
+### 백엔드 조립 라인에서의 위치
 
-    Model[".task 모델 파일\n(lite / full / heavy)"]
+<div align="center">
+  <img src="docs/etc/architecture-slides/mediapipe-pose-blueprint/image3.png" width="80%" alt="백엔드 조립 라인에서의 위치">
+</div>
 
-    Frames --> PoseInfer
-    Model --> MpAdapter
-    MpAdapter --> PoseInfer --> SkeletonMapper
-```
+### 데이터 형태 변화 흐름
+
+<div align="center">
+  <img src="docs/etc/architecture-slides/mediapipe-pose-blueprint/image5.png" width="80%" alt="데이터 형태 변화 흐름">
+</div>
+
+`ExtractedFrame` → `mp.Image` 변환 → `PoseLandmarkerResult` → 33개 관절 좌표 추출 → Skeleton JSON
+
+### Adapter Pattern — 복잡성 격리
+
+<div align="center">
+  <img src="docs/etc/architecture-slides/mediapipe-pose-blueprint/image6.png" width="80%" alt="아키텍처 원칙: 복잡성 격리">
+</div>
 
 | 파일 | 역할 |
 | --- | --- |
-| `adapter/mediapipe_adapter.py` | `PoseLandmarker` 생성/해제, CPU·GPU delegate 자동 폴백, `mp.Image` 변환 |
-| `service/pose_inference.py` | 프레임 배치 추론, 33개 랜드마크 직렬화, 추론 벤치마크 기록 |
-| `service/skeleton_mapper.py` | 추론 결과를 분석 파이프라인이 소비하는 Skeleton JSON 포맷으로 변환 |
+| `service/pose_inference.py` | 추론 흐름(Orchestration) 담당, 결과 직렬화 |
+| `adapter/mediapipe_adapter.py` | MediaPipe Vision API 직접 호출, 초기화·종료 관리 |
+
+### 모델 변형 (Model Variant) 비교
+
+<div align="center">
+  <img src="docs/etc/architecture-slides/mediapipe-pose-blueprint/image8.png" width="80%" alt="추론 엔진 튜닝: 모델 변형 비교">
+</div>
+
+| Variant | 번들 크기 | Pixel 3 CPU FPS | 특징 |
+| :---: | :---: | :---: | --- |
+| Lite | 3 MB | ~44 FPS | 실시간 처리 우선 |
+| **Full** (기본값) | 6 MB | ~18 FPS | 백엔드 기본 운용값 |
+| Heavy | 26 MB | ~4 FPS | 정밀 배치 분석 |
+
+### GPU → CPU Fallback 정책
+
+<div align="center">
+  <img src="docs/etc/architecture-slides/mediapipe-pose-blueprint/image9.png" width="80%" alt="하드웨어 실행 정책: 안전망 구조">
+</div>
+
+GPU 초기화 실패 시 CPU로 자동 전환하며, `delegate_fallback_applied` 플래그로 추적합니다.
+
+### 마스터 아키텍처 청사진
+
+<div align="center">
+  <img src="docs/etc/architecture-slides/mediapipe-pose-blueprint/image11.png" width="80%" alt="마스터 아키텍처 청사진(통합)">
+</div>
 
 ---
 
 ## 데이터 분석 파이프라인
 
-> Skeleton JSON → 자세 분석 결과
+> Skeleton JSON → 자세 분석 결과 — LLM 없이도 독립적으로 동작하는 Biomechanics Engine
+
+<div align="center">
+  <img src="docs/etc/architecture-slides/motion-analysis-backend-blueprint/image11.png" width="80%" alt="데이터 분석 파이프라인의 독립성">
+</div>
 
 ```mermaid
 flowchart TD
     Skeleton["Skeleton JSON\n(프레임별 랜드마크)"]
 
     subgraph Pipeline ["service/analysis_*"]
-        Preprocess["analysis_preprocess\n이상 프레임 필터링\n가시성 기준 정제"]
-        BodyProfile["analysis_body_profile\n팔다리 비율 추정\n신체 높이 추정"]
+        Preprocess["analysis_preprocess\n이상 프레임 필터링 / 가시성 기준 정제"]
+        BodyProfile["analysis_body_profile\n신체 프로필 추정\n(팔다리 비율, 신체 높이)"]
         COP["analysis_cop\n촬영 시점 분류 (정면/측면)\n무게중심(CoP) 시계열 산출"]
-        Features["analysis_features\n관절 각도 계산\n바 궤적 추출\n시계열 특징 벡터 생성"]
+        Features["analysis_features\n관절 각도 · 바 궤적\n시계열 특징 벡터 생성"]
         Reps["analysis_reps\n렙 구간 감지\n(descent / bottom / ascent)"]
         KPIs["analysis_kpis\nROM · bar_path_deviation\n· 좌우 대칭 등 KPI 계산"]
-        Thresholds["analysis_thresholds\n신체 프로필 기반\n개인화 임계값 산출"]
+        Thresholds["analysis_thresholds\n신체 프로필 기반 개인화 임계값"]
         Events["analysis_events\n렙 구간별 이벤트 시점 추출"]
         Issues["analysis_issues\nknee_cave / forward_lean 등\n자세 이슈 감지"]
         Viz["analysis_visualization\n클라이언트용 시각화 데이터"]
-        LLM["llm_feedback\nClaude API 호출\n강점 · 교정 · 코치 큐 생성"]
+        LLM["llm_feedback\nClaude API → 코치 피드백"]
     end
 
-    Result(["MotionAnalysisResult\n(summary / kpis / repSegments\n/ issues / visualization / llmFeedback)"])
+    Result(["MotionAnalysisResult"])
 
     Skeleton --> Preprocess --> BodyProfile --> COP --> Features
     Features --> Reps --> KPIs --> Thresholds
@@ -528,9 +609,22 @@ flowchart TD
 | `analysis_cop.py` | 촬영 시점 분류(정면/측면), 무게중심(CoP) 시계열 산출 |
 | `analysis_features.py` | 관절 각도, 바 궤적, 좌우 대칭 등 시계열 특징 벡터 추출 |
 | `analysis_reps.py` | 하강·최저점·상승 구간 감지, 렙 세그먼트 분리 |
-| `analysis_kpis.py` | ROM, 바 경로 편차, 속도 등 핵심 KPI 계산 |
+| `analysis_kpis.py` | ROM, 바 경로 편차 등 핵심 KPI 계산 |
 | `analysis_thresholds.py` | 신체 프로필 기반 개인화 자세 임계값 산출 |
-| `analysis_events.py` | 렙 구간별 주요 이벤트 시점(descent_start 등) 추출 |
+| `analysis_events.py` | 렙 구간별 주요 이벤트 시점 추출 |
 | `analysis_issues.py` | knee_cave, forward_lean 등 자세 이슈 판정 |
 | `analysis_visualization.py` | 클라이언트용 시각화 오버레이 데이터 생성 |
 | `llm_feedback.py` | Claude API 호출 → 강점 / 교정 / 코치 큐 생성 |
+
+---
+
+## 팀 역할 매트릭스
+
+<div align="center">
+  <img src="docs/etc/architecture-slides/motion-analysis-backend-blueprint/image12.png" width="80%" alt="팀 역할 및 협업 매트릭스">
+</div>
+
+| 역할 | 집중 영역 | 핵심 파일 |
+| --- | --- | --- |
+| **Core Developer** | 서버/API 담당 — API 엔드포인트, 비동기 상태 관리, 외부 라이브러리 연동 | `main.py`, `app.py`, `controller/`, `adapter/` |
+| **Data Analyst** | 데이터 분석 담당 — 스켈레톤 기반 운동역학 알고리즘 구현, 분석 지표 발굴 | `service/analysis_pipeline.py`, `schema/result.py` |
